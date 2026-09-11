@@ -1,0 +1,15 @@
+# Config leve para validar rapidamente que o pipeline funciona de ponta a
+# ponta (poucos runs, GA com orçamento pequeno). Gere o dataset antes com:
+#   python experiments/make_synthetic_dataset.py
+
+dataset: data/raw/synthetic_quicktest.txt
+n_runs: 2
+seed: 0
+search_best_k: true
+membership_side: target
+
+tuning:
+  method: ga
+  k_max_bounds: [1, 15]
+  n_agents: 5
+  n_iterations: 5

@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the original paper and this repository."
+title: "Fuzzy-OPF: A Python implementation of the Fuzzy Optimum-Path Forest"
+authors:
+  - family-names: "Souza"
+    given-names: "Renato W. R."
+version: 0.1.0
+date-released: 2026-09-11
+license: Apache-2.0
+preferred-citation:
+  type: article
+  title: "A Novel Approach for Optimum-Path Forest Classification Using Fuzzy Logic"
+  authors:
+    - family-names: "Souza"
+      given-names: "Renato W. R."
+    - family-names: "Oliveira"
+      given-names: "João V. C."
+    - family-names: "Passos"
+      given-names: "Leandro A."
+    - family-names: "Ding"
+      given-names: "Weiping"
+    - family-names: "Papa"
+      given-names: "João P."
+    - family-names: "Albuquerque"
+      given-names: "Victor Hugo C."
+  journal: "IEEE Transactions on Fuzzy Systems"
+  year: 2019
+  doi: "10.1109/TFUZZ.2019.2949014"

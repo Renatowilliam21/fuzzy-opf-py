@@ -1,0 +1,31 @@
+# Template de configuração de experimento.
+# Copie para experiments/configs/<dataset>.yaml e ajuste.
+
+# Caminho do dataset relativo à raiz do repo (.dat, .txt ou .csv no formato OPF).
+dataset: data/raw/boat.dat
+
+# Número de execuções (protocolo do artigo: 20 runs, split 60/20/20).
+n_runs: 20
+
+# Semente base (cada run usa base_seed + run_id).
+seed: 0
+
+# Se True, cada treino do Fuzzy-OPF busca k* via corte mínimo (equivalente ao
+# opf_BestkMinCut do C). Se False, usa k_max fixo como vizinhança.
+search_best_k: true
+
+# "target" reproduz a Eq. 6 do artigo (pertinência do nó candidato).
+# "source" reproduz o comportamento legado do LibOPF_fuzzy em C.
+membership_side: target
+
+# Estratégia de tuning de hiperparâmetros do Fuzzy-OPF:
+#   method: fixed -> usa k_max/sigma abaixo, sem busca
+#   method: ga    -> busca via Algoritmo Genético (opytimizer) no split de validação
+tuning:
+  method: ga
+  k_max_bounds: [1, 150]
+  n_agents: 15
+  n_iterations: 30
+  # usados apenas se method == fixed:
+  # k_max: 20
+  # sigma: 0.6

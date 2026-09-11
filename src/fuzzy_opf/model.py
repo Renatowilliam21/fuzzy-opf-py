@@ -1,0 +1,250 @@
+# Copyright (c) 2026 Renato W. R. de Souza.
+# Licensed under the Apache License, Version 2.0.
+
+"""Fuzzy Optimum-Path Forest (Fuzzy-OPF).
+
+Port of the original C implementation (LibOPF_fuzzy) to Python, built on top
+of ``opfython`` (SupervisedOPF / UnsupervisedOPF), following:
+
+    R. W. R. de Souza, J. V. C. de Oliveira, L. A. Passos, W. Ding,
+    J. P. Papa and V. H. C. de Albuquerque. "A Novel Approach for
+    Optimum-Path Forest Classification Using Fuzzy Logic."
+    IEEE Transactions on Fuzzy Systems (2019). doi:10.1109/TFUZZ.2019.2949014
+
+Relative to the original C code, this port:
+  * reuses ``opfython``'s density/clustering routines instead of
+    re-implementing and re-reading the dataset twice (see the original
+    ``fuzzy.c``, which calls ``ReadSubgraph`` on the same file twice);
+  * applies the membership F_Theta(u) of the *candidate* node u in the
+    cost update, matching Eq. (6) / Algorithm 3 of the paper exactly.
+    The original C code (``OPF.c::opf_OPF_Fuzzy_Training``) multiplies by
+    the membership of the *source* node p instead; both behaviours are kept
+    here (``membership_side="target"`` reproduces the paper,
+    ``membership_side="source"`` reproduces the legacy C behaviour) so
+    results can be compared/reproduced;
+  * validates sigma against the range used in the paper ([0.2, 1.2]) and
+    guards against rho_max == rho_min (constant density -> would divide by
+    zero in the original C code);
+  * exposes k_max/sigma as normal constructor parameters so they can be
+    driven by an external hyperparameter search (grid, random or
+    meta-heuristic, see ``fuzzy_opf.tuning``) instead of a hardcoded
+    brute-force loop like ``fuzzy_validation_opf.c``.
+"""
+
+from __future__ import annotations
+
+import time
+from typing import Literal
+
+import numpy as np
+
+import opfython.utils.constants as c
+from opfython.core.heap import Heap
+from opfython.core.opf import OPF
+from opfython.core.subgraph import Subgraph
+from opfython.models.unsupervised import UnsupervisedOPF
+from opfython.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+MembershipSide = Literal["target", "source"]
+
+
+class FuzzyOPF(OPF):
+    """Supervised OPF classifier weighted by an unsupervised membership degree."""
+
+    def __init__(
+        self,
+        k_max: int = 10,
+        sigma: float = 0.6,
+        search_best_k: bool = True,
+        membership_side: MembershipSide = "target",
+        distance: str = "log_squared_euclidean",
+    ) -> None:
+        """
+        Args:
+            k_max: Upper bound for the k-nearest-neighbour graph used to
+                estimate the unsupervised density (Eq. 3 in the paper).
+            sigma: Lower bound of the membership function (Eq. 5). The
+                paper restricts it to [0.2, 1.2]; sigma == 1 makes
+                Fuzzy-OPF degenerate to standard OPF.
+            search_best_k: If True, runs the minimum-cut search
+                (equivalent to ``opf_BestkMinCut``) over k in [1, k_max]
+                to pick k*. If False, uses k_max directly as the fixed
+                neighbourhood size (equivalent to the plain ``fuzzy.c``
+                driver, which skips the min-cut search).
+            membership_side: See module docstring.
+            distance: Distance metric name registered in opfython.
+        """
+        if not 0.0 < sigma <= 1.5:
+            raise ValueError(f"`sigma` looks out of range (paper uses [0.2, 1.2]), got {sigma}.")
+        if k_max < 1:
+            raise ValueError(f"`k_max` must be >= 1, got {k_max}.")
+
+        logger.info("Overriding class: OPF -> FuzzyOPF.")
+        super().__init__(distance, pre_computed_distance=None)
+
+        self.k_max = k_max
+        self.sigma = sigma
+        self.search_best_k = search_best_k
+        self.membership_side = membership_side
+
+        self._cluster_model: UnsupervisedOPF | None = None
+
+    # ------------------------------------------------------------------ #
+    # Membership (Eq. 5)
+    # ------------------------------------------------------------------ #
+    def _compute_membership(self, subgraph) -> np.ndarray:
+        rho = np.asarray([node.density for node in subgraph.nodes], dtype=float)
+
+        # NOTE: subgraph.min_density/max_density (like sg->mindens/maxdens in
+        # the original C opf_PDF) hold the *pre-normalization* PDF stats, not
+        # the range of the actual (normalized) node.density values used by
+        # Eq. 5. We must recompute rho_min/rho_max over `rho` itself here,
+        # exactly like the original C authors did in fuzzy.c/fuzzy_validation_opf.c
+        # (fuzzy_mindens/fuzzy_maxdens, looped explicitly over node[i].dens).
+        rho_min, rho_max = float(rho.min()), float(rho.max())
+
+        spread = rho_max - rho_min
+        if spread < 1e-12:
+            # All samples share the same density (degenerate/constant PDF):
+            # every sample is equally "typical", so membership collapses to 1.
+            logger.warning(
+                "rho_max == rho_min: degenerate density, membership set to 1.0 for every sample."
+            )
+            return np.ones_like(rho)
+
+        return (1.0 - self.sigma) * ((rho - rho_min) / spread) ** 2 + self.sigma
+
+    # ------------------------------------------------------------------ #
+    # Training (Algorithm 3)
+    # ------------------------------------------------------------------ #
+    def fit(self, X_train: np.ndarray, Y_train: np.ndarray) -> "FuzzyOPF":
+        logger.info("Fitting Fuzzy-OPF classifier ...")
+        start = time.time()
+
+        # 1) Unsupervised step: densities via OPF clustering (Eq. 3).
+        #    This replaces opf_CreateArcs + opf_PDF (+ opf_BestkMinCut).
+        min_k = 1 if self.search_best_k else self.k_max
+        cluster_model = UnsupervisedOPF(min_k=min_k, max_k=self.k_max, distance=self.distance)
+        cluster_model.fit(X_train, Y_train)
+        self._cluster_model = cluster_model
+
+        membership = self._compute_membership(cluster_model.subgraph)
+
+        # 2) Supervised step: same graph, complete adjacency, weighted by membership.
+        self.subgraph = Subgraph(X_train, Y_train)
+        for node, m in zip(self.subgraph.nodes, membership):
+            node.membership = float(m)
+
+        self._find_prototypes()
+        self._grow_fuzzy_minimax_forest()
+        self.subgraph.trained = True
+
+        logger.info("Classifier has been fitted.")
+        logger.info("Training time: %s seconds.", time.time() - start)
+        return self
+
+    def _find_prototypes(self) -> None:
+        """Same MST-based prototype search used by standard SupervisedOPF."""
+        h = Heap(self.subgraph.n_nodes)
+        self.subgraph.nodes[0].pred = c.NIL
+        h.insert(0)
+
+        prototypes = []
+        while not h.is_empty():
+            p = h.remove()
+            self.subgraph.nodes[p].cost = h.cost[p]
+
+            pred = self.subgraph.nodes[p].pred
+            if pred != c.NIL:
+                if self.subgraph.nodes[p].label != self.subgraph.nodes[pred].label:
+                    if self.subgraph.nodes[p].status != c.PROTOTYPE:
+                        self.subgraph.nodes[p].status = c.PROTOTYPE
+                        prototypes.append(p)
+                    if self.subgraph.nodes[pred].status != c.PROTOTYPE:
+                        self.subgraph.nodes[pred].status = c.PROTOTYPE
+                        prototypes.append(pred)
+
+            for q in range(self.subgraph.n_nodes):
+                if h.color[q] != c.BLACK and p != q:
+                    weight = self.distance_fn(self.subgraph.nodes[p].features, self.subgraph.nodes[q].features)
+                    if weight < h.cost[q]:
+                        self.subgraph.nodes[q].pred = p
+                        h.update(q, weight)
+
+        if not prototypes and all(n.label == self.subgraph.nodes[0].label for n in self.subgraph.nodes):
+            self.subgraph.nodes[0].status = c.PROTOTYPE
+            prototypes.append(0)
+
+        logger.debug("Prototypes: %s.", prototypes)
+
+    def _grow_fuzzy_minimax_forest(self) -> None:
+        """Competition process weighted by membership (Eq. 6 / Algorithm 3)."""
+        subgraph = self.subgraph
+        heap = Heap(size=subgraph.n_nodes)
+
+        for i, node in enumerate(subgraph.nodes):
+            if node.status == c.PROTOTYPE:
+                node.pred = c.NIL
+                node.predicted_label = node.label
+                heap.cost[i] = 0
+                heap.insert(i)
+            else:
+                heap.cost[i] = c.FLOAT_MAX
+
+        while not heap.is_empty():
+            p = heap.remove()
+            node = subgraph.nodes[p]
+            subgraph.idx_nodes.append(p)
+            node.cost = heap.cost[p]
+
+            for q, neighbour in enumerate(subgraph.nodes):
+                if p != q and heap.cost[p] < heap.cost[q]:
+                    weight = self.distance_fn(node.features, neighbour.features)
+                    base_cost = np.maximum(heap.cost[p], weight)
+
+                    # Eq. 6: cst <- F_Theta(u) * max{C(q), d(q,u)}.
+                    # "target" = candidate/destination node (paper); "source" =
+                    # node being expanded (legacy LibOPF_fuzzy C behaviour).
+                    membership = neighbour.membership if self.membership_side == "target" else node.membership
+                    current_cost = membership * base_cost
+
+                    if current_cost < heap.cost[q]:
+                        neighbour.pred = p
+                        neighbour.predicted_label = node.predicted_label
+                        heap.update(q, current_cost)
+
+    # ------------------------------------------------------------------ #
+    # Classification (unchanged w.r.t. standard OPF: membership only acts
+    # during training, exactly as stated in the paper)
+    # ------------------------------------------------------------------ #
+    def predict(self, X_val: np.ndarray) -> list[int]:
+        if self.subgraph is None or not self.subgraph.trained:
+            raise RuntimeError("Call `fit` before `predict`.")
+
+        pred_subgraph = Subgraph(X_val)
+
+        for i in range(pred_subgraph.n_nodes):
+            j = 0
+            k = self.subgraph.idx_nodes[j]
+            weight = self.distance_fn(self.subgraph.nodes[k].features, pred_subgraph.nodes[i].features)
+            min_cost = np.maximum(self.subgraph.nodes[k].cost, weight)
+            current_label = self.subgraph.nodes[k].predicted_label
+
+            while (
+                j < self.subgraph.n_nodes - 1
+                and min_cost > self.subgraph.nodes[self.subgraph.idx_nodes[j + 1]].cost
+            ):
+                l = self.subgraph.idx_nodes[j + 1]
+                weight = self.distance_fn(self.subgraph.nodes[l].features, pred_subgraph.nodes[i].features)
+                tmp = np.maximum(self.subgraph.nodes[l].cost, weight)
+                if tmp < min_cost:
+                    min_cost = tmp
+                    current_label = self.subgraph.nodes[l].predicted_label
+                j += 1
+                k = l
+
+            pred_subgraph.nodes[i].predicted_label = current_label
+
+        return [node.predicted_label for node in pred_subgraph.nodes]

@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Testes / cobertura
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Datasets originais (grandes / redistribuição do LibOPF, não versionar).
+# O dataset sintético de teste rápido é gerado sob demanda por
+# experiments/make_synthetic_dataset.py (também rodado pela CI), não
+# precisa ser versionado.
+data/raw/*
+!data/raw/.gitkeep
+
+# Resultados de experimentos (podem ser grandes / muitos; versionar sob demanda)
+results/*
+!results/.gitkeep
+
+# Notebooks: manter apenas a pasta
+notebooks/*
+!notebooks/.gitkeep
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+
+# Logs gerados pelas libs (opfython/opytimizer) ao rodar localmente
+*.log
