@@ -42,6 +42,7 @@ import opfython.utils.constants as c
 from opfython.core.heap import Heap
 from opfython.core.opf import OPF
 from opfython.core.subgraph import Subgraph
+from opfython.models.supervised import SupervisedOPF
 from opfython.models.unsupervised import UnsupervisedOPF
 from opfython.utils.logging import get_logger
 
@@ -170,38 +171,16 @@ class FuzzyOPF(OPF):
         return self
 
     def _find_prototypes(self) -> None:
-        """Same MST-based prototype search used by standard SupervisedOPF."""
-        h = Heap(self.subgraph.n_nodes)
-        self.subgraph.nodes[0].pred = c.NIL
-        h.insert(0)
+        """MST-based prototype search (Sec. II-A of the paper).
 
-        prototypes = []
-        while not h.is_empty():
-            p = h.remove()
-            self.subgraph.nodes[p].cost = h.cost[p]
-
-            pred = self.subgraph.nodes[p].pred
-            if pred != c.NIL:
-                if self.subgraph.nodes[p].label != self.subgraph.nodes[pred].label:
-                    if self.subgraph.nodes[p].status != c.PROTOTYPE:
-                        self.subgraph.nodes[p].status = c.PROTOTYPE
-                        prototypes.append(p)
-                    if self.subgraph.nodes[pred].status != c.PROTOTYPE:
-                        self.subgraph.nodes[pred].status = c.PROTOTYPE
-                        prototypes.append(pred)
-
-            for q in range(self.subgraph.n_nodes):
-                if h.color[q] != c.BLACK and p != q:
-                    weight = self.distance_fn(self.subgraph.nodes[p].features, self.subgraph.nodes[q].features)
-                    if weight < h.cost[q]:
-                        self.subgraph.nodes[q].pred = p
-                        h.update(q, weight)
-
-        if not prototypes and all(n.label == self.subgraph.nodes[0].label for n in self.subgraph.nodes):
-            self.subgraph.nodes[0].status = c.PROTOTYPE
-            prototypes.append(0)
-
-        logger.debug("Prototypes: %s.", prototypes)
+        Delegated directly to ``SupervisedOPF._find_prototypes`` instead of
+        keeping a hand-copied duplicate here: it only touches attributes
+        FuzzyOPF also has via the shared ``OPF`` base class (``subgraph``,
+        ``distance_fn``, ``pre_computed_distance``, ``pre_distances``), so
+        calling the real, tested implementation keeps this in sync with
+        opfython automatically instead of risking silent drift.
+        """
+        SupervisedOPF._find_prototypes(self)
 
     def _grow_fuzzy_minimax_forest(self) -> None:
         """Competition process weighted by membership (Eq. 6 / Algorithm 3)."""
