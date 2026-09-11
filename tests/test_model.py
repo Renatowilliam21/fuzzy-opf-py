@@ -42,6 +42,11 @@ def test_sigma_out_of_range_raises():
         FuzzyOPF(sigma=2.0)
 
 
+def test_invalid_membership_side_raises():
+    with pytest.raises(ValueError):
+        FuzzyOPF(membership_side="oops")
+
+
 def test_membership_bounds(toy_dataset):
     X, y = toy_dataset
     model = FuzzyOPF(k_max=5, sigma=0.6, search_best_k=True)
@@ -99,3 +104,22 @@ def test_genetic_search_returns_valid_result(toy_dataset):
     assert 1 <= result.k_max <= 10
     assert 0.2 <= result.sigma <= 1.2
     assert 0.0 <= result.accuracy <= 1.0
+
+
+def test_genetic_search_does_not_leak_global_rng_state(toy_dataset):
+    """A seeded genetic_search() call must not change np.random's state for
+    whatever code runs after it (see fuzzy_opf.tuning._seeded_global_rng)."""
+    X, y = toy_dataset
+    X_train, y_train = X[:60], y[:60]
+    X_val, y_val = X[60:90], y[60:90]
+
+    np.random.seed(123)
+    before = np.random.get_state()
+
+    genetic_search(
+        X_train, y_train, X_val, y_val,
+        k_max_bounds=(1, 10), n_agents=4, n_iterations=3, seed=0,
+    )
+
+    after = np.random.get_state()
+    assert before[1].tolist() == after[1].tolist()

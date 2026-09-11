@@ -80,6 +80,10 @@ class FuzzyOPF(OPF):
             raise ValueError(f"`sigma` looks out of range (paper uses [0.2, 1.2]), got {sigma}.")
         if k_max < 1:
             raise ValueError(f"`k_max` must be >= 1, got {k_max}.")
+        if membership_side not in ("target", "source"):
+            raise ValueError(
+                f"`membership_side` must be 'target' or 'source', got {membership_side!r}."
+            )
 
         logger.info("Overriding class: OPF -> FuzzyOPF.")
         super().__init__(distance, pre_computed_distance=None)
@@ -94,7 +98,7 @@ class FuzzyOPF(OPF):
     # ------------------------------------------------------------------ #
     # Membership (Eq. 5)
     # ------------------------------------------------------------------ #
-    def _compute_membership(self, subgraph) -> np.ndarray:
+    def _compute_membership(self, subgraph: Subgraph) -> np.ndarray:
         rho = np.asarray([node.density for node in subgraph.nodes], dtype=float)
 
         # NOTE: subgraph.min_density/max_density (like sg->mindens/maxdens in
@@ -119,15 +123,35 @@ class FuzzyOPF(OPF):
     # ------------------------------------------------------------------ #
     # Training (Algorithm 3)
     # ------------------------------------------------------------------ #
-    def fit(self, X_train: np.ndarray, Y_train: np.ndarray) -> "FuzzyOPF":
+    def fit(
+        self,
+        X_train: np.ndarray,
+        Y_train: np.ndarray,
+        precomputed_cluster_model: UnsupervisedOPF | None = None,
+    ) -> "FuzzyOPF":
+        """Fit the classifier.
+
+        Args:
+            X_train, Y_train: Training data.
+            precomputed_cluster_model: Optional, already-fitted
+                ``UnsupervisedOPF`` over the same ``X_train``/``Y_train``.
+                When given, the (expensive) clustering/density step is
+                skipped and this model's densities are reused directly.
+                Used by ``fuzzy_opf.tuning`` to cache clustering per
+                ``k_max`` across sigma values without duplicating the
+                training logic here.
+        """
         logger.info("Fitting Fuzzy-OPF classifier ...")
         start = time.time()
 
         # 1) Unsupervised step: densities via OPF clustering (Eq. 3).
         #    This replaces opf_CreateArcs + opf_PDF (+ opf_BestkMinCut).
-        min_k = 1 if self.search_best_k else self.k_max
-        cluster_model = UnsupervisedOPF(min_k=min_k, max_k=self.k_max, distance=self.distance)
-        cluster_model.fit(X_train, Y_train)
+        if precomputed_cluster_model is not None:
+            cluster_model = precomputed_cluster_model
+        else:
+            min_k = 1 if self.search_best_k else self.k_max
+            cluster_model = UnsupervisedOPF(min_k=min_k, max_k=self.k_max, distance=self.distance)
+            cluster_model.fit(X_train, Y_train)
         self._cluster_model = cluster_model
 
         membership = self._compute_membership(cluster_model.subgraph)

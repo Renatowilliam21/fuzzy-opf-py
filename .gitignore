@@ -35,3 +35,4 @@ notebooks/*
 
 # Logs gerados pelas libs (opfython/opytimizer) ao rodar localmente
 *.log
+*.tar.gz

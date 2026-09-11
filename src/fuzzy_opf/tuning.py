@@ -19,6 +19,7 @@ Two things are addressed here:
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Callable
@@ -30,6 +31,7 @@ from opytimizer.optimizers.single_objective.evolutionary.ga import GA
 from opytimizer.spaces.search import SearchSpace
 
 from opfython.math.general import opf_accuracy
+from opfython.models.unsupervised import UnsupervisedOPF
 
 from .model import FuzzyOPF
 
@@ -42,7 +44,29 @@ class TuningResult:
     k_max: int
     sigma: float
     accuracy: float
-    history: "object"
+    history: object
+
+
+@contextmanager
+def _seeded_global_rng(seed: int | None):
+    """Seed NumPy's global RNG for the block, then restore the prior state.
+
+    ``opytimizer`` calls ``np.random.rand()`` directly (module-level, not an
+    injectable ``Generator``), so reproducing a GA run means seeding the
+    global RNG. Restoring the previous state afterwards keeps that
+    reproducibility from leaking into unrelated code that runs later in the
+    same process (e.g. another dataset split in the calling script).
+    """
+    if seed is None:
+        yield
+        return
+
+    prior_state = np.random.get_state()
+    np.random.seed(seed)
+    try:
+        yield
+    finally:
+        np.random.set_state(prior_state)
 
 
 def _make_fitness(
@@ -53,6 +77,7 @@ def _make_fitness(
     k_max_bounds: tuple[int, int],
     search_best_k: bool,
     membership_side: str,
+    distance: str,
 ) -> Callable[[np.ndarray], float]:
     """Builds the objective evaluated by the meta-heuristic (minimization)."""
 
@@ -62,14 +87,9 @@ def _make_fitness(
     # agent revisiting a k_max already tried by another agent/generation
     # skips the expensive clustering step entirely.
     @lru_cache(maxsize=None)
-    def _cached_membership(k_max: int):
-        model = FuzzyOPF(k_max=k_max, sigma=1.0, search_best_k=search_best_k)
-        # We reuse FuzzyOPF's own clustering call, just to populate the
-        # cache; sigma is irrelevant here, only densities matter.
-        from opfython.models.unsupervised import UnsupervisedOPF
-
+    def _cached_cluster_model(k_max: int) -> UnsupervisedOPF:
         min_k = 1 if search_best_k else k_max
-        cluster_model = UnsupervisedOPF(min_k=min_k, max_k=k_max, distance=model.distance)
+        cluster_model = UnsupervisedOPF(min_k=min_k, max_k=k_max, distance=distance)
         cluster_model.fit(X_train, Y_train)
         return cluster_model
 
@@ -77,19 +97,18 @@ def _make_fitness(
         k_max = int(np.clip(round(x[0, 0]), k_lo, k_hi))
         sigma = float(np.clip(x[1, 0], *SIGMA_BOUNDS))
 
-        cluster_model = _cached_membership(k_max)
+        cluster_model = _cached_cluster_model(k_max)
 
-        model = FuzzyOPF(k_max=k_max, sigma=sigma, search_best_k=search_best_k, membership_side=membership_side)
-        membership = model._compute_membership(cluster_model.subgraph)
-
-        from opfython.core.subgraph import Subgraph
-
-        model.subgraph = Subgraph(X_train, Y_train)
-        for node, m in zip(model.subgraph.nodes, membership):
-            node.membership = float(m)
-        model._find_prototypes()
-        model._grow_fuzzy_minimax_forest()
-        model.subgraph.trained = True
+        model = FuzzyOPF(
+            k_max=k_max,
+            sigma=sigma,
+            search_best_k=search_best_k,
+            membership_side=membership_side,
+            distance=distance,
+        )
+        # Reuses FuzzyOPF.fit's actual training code path (no duplicated
+        # logic here) while skipping the redundant re-clustering.
+        model.fit(X_train, Y_train, precomputed_cluster_model=cluster_model)
 
         preds = model.predict(X_val)
         acc = opf_accuracy(Y_val, preds)
@@ -110,6 +129,7 @@ def genetic_search(
     n_iterations: int = 30,
     search_best_k: bool = True,
     membership_side: str = "target",
+    distance: str = "log_squared_euclidean",
     seed: int | None = None,
 ) -> TuningResult:
     """Finds (k_max, sigma) with a Genetic Algorithm instead of grid search.
@@ -123,35 +143,39 @@ def genetic_search(
         n_iterations: Number of generations.
         search_best_k: Passed through to FuzzyOPF (min-cut k* search).
         membership_side: "target" (paper's Eq. 6) or "source" (legacy C).
-        seed: Optional RNG seed for reproducibility.
+        distance: Distance metric name registered in opfython, used for
+            both the clustering and the supervised step.
+        seed: Optional RNG seed for reproducibility. Only affects this call
+            (the global NumPy RNG state is restored afterwards).
 
     Returns:
         TuningResult with the best (k_max, sigma) and validation accuracy.
     """
 
-    if seed is not None:
-        np.random.seed(seed)
-
     n_variables = 2  # [k_max, sigma]
     lower_bound = [k_max_bounds[0], SIGMA_BOUNDS[0]]
     upper_bound = [k_max_bounds[1], SIGMA_BOUNDS[1]]
 
-    space = SearchSpace(
-        n_agents=n_agents,
-        n_variables=n_variables,
-        n_objectives=1,
-        lower_bound=lower_bound,
-        upper_bound=upper_bound,
-    )
-    optimizer = GA()
-    function = Function(
-        _make_fitness(
-            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side
+    with _seeded_global_rng(seed):
+        # SearchSpace() randomizes the initial population on construction,
+        # so it must be seeded too -- otherwise `seed` would only cover
+        # task.start() and the run would not be fully reproducible.
+        space = SearchSpace(
+            n_agents=n_agents,
+            n_variables=n_variables,
+            n_objectives=1,
+            lower_bound=lower_bound,
+            upper_bound=upper_bound,
         )
-    )
+        optimizer = GA()
+        function = Function(
+            _make_fitness(
+                X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance
+            )
+        )
 
-    task = Opytimizer(space, optimizer, function, save_agents=False)
-    history = task.start(n_iterations=n_iterations)
+        task = Opytimizer(space, optimizer, function, save_agents=False)
+        history = task.start(n_iterations=n_iterations)
 
     best_agent = space.best_agent
     best_k_max = int(np.clip(round(best_agent.position[0, 0]), *k_max_bounds))
