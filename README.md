@@ -1,5 +1,7 @@
 # Fuzzy-OPF (Python)
 
+![CI](https://github.com/Renatowilliam21/fuzzy-opf-py/actions/workflows/ci.yml/badge.svg)
+
 Port do `LibOPF_fuzzy` (C) para Python, construído sobre as libs do Recogna
 (`opfython` + `opytimizer`), implementando:
 
