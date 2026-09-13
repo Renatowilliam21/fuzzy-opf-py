@@ -1,0 +1,17 @@
+dataset: data/raw/boat.dat
+n_runs: 20
+seed: 0
+search_best_k: true
+membership_side: target
+
+# IMPORTANT: opfython requires k_max < n_nodes in the *training* split (60%
+# of the dataset here). Boat has ~100 samples total -> ~60 in training, so
+# k_max_bounds must stay comfortably below that (the paper's own grid goes
+# up to 150, which only makes sense for their larger datasets; for Boat it
+# would raise a ValueError). Adjust the upper bound to your actual dataset
+# size if you swap in a different one.
+tuning:
+  method: ga
+  k_max_bounds: [1, 40]
+  n_agents: 15
+  n_iterations: 30

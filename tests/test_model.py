@@ -123,3 +123,50 @@ def test_genetic_search_does_not_leak_global_rng_state(toy_dataset):
 
     after = np.random.get_state()
     assert before[1].tolist() == after[1].tolist()
+
+
+def test_no_predecessor_cycles_after_fit(toy_dataset):
+    """Regression test: multiplying cost by membership (<= 1) can make a
+    node's fuzzy cost fall below an already-finalized node's cost. Without
+    the `heap.color[q] != BLACK` guard, this could rewrite an already-black
+    node's `pred`, creating a cycle that hangs `mark_nodes`/`prune` forever
+    (see model.py's `_grow_fuzzy_minimax_forest`)."""
+    X, y = toy_dataset
+    model = FuzzyOPF(k_max=5, sigma=0.3, search_best_k=True)  # low sigma stresses this path
+    model.fit(X, y)
+
+    n = model.subgraph.n_nodes
+    for start in range(n):
+        i = start
+        steps = 0
+        while model.subgraph.nodes[i].pred != -1:
+            i = model.subgraph.nodes[i].pred
+            steps += 1
+            assert steps <= n, f"predecessor cycle detected starting at node {start}"
+
+
+def test_predict_marks_nodes_and_does_not_hang(toy_dataset):
+    """predict() must terminate promptly and mark relevant nodes (needed by
+    prune()) -- this used to hang indefinitely before the fix above."""
+    X, y = toy_dataset
+    X_train, y_train = X[:80], y[:80]
+    X_test = X[80:]
+
+    model = FuzzyOPF(k_max=5, sigma=0.3, search_best_k=True)
+    model.fit(X_train, y_train)
+    preds = model.predict(X_test)
+
+    assert len(preds) == len(X_test)
+    assert any(node.relevant for node in model.subgraph.nodes)
+
+
+def test_prune_reduces_or_keeps_training_set(toy_dataset):
+    X, y = toy_dataset
+    X_train, y_train = X[:60].copy(), y[:60].copy()
+    X_val, y_val = X[60:90].copy(), y[60:90].copy()
+
+    model = FuzzyOPF(k_max=5, sigma=0.6, search_best_k=True)
+    model.prune(X_train, y_train, X_val, y_val, n_iterations=2)
+
+    assert model.subgraph.n_nodes <= 60
+    assert model.subgraph.trained

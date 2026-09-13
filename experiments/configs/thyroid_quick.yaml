@@ -1,0 +1,14 @@
+dataset: data/raw/thyroid.txt
+n_runs: 20
+seed: 0
+search_best_k: false
+membership_side: target
+
+# Validação rápida: hiperparâmetros fixos, sem busca via GA. Cada run treina
+# só 1 Fuzzy-OPF (+ 1 OPF padrão) em vez de até 450 (GA), então roda em
+# minutos em vez de dias -- útil como primeiro sanity-check antes de decidir
+# se vale a pena rodar a busca completa (ver thyroid.yaml) em segundo plano.
+tuning:
+  method: fixed
+  k_max: 20
+  sigma: 0.6

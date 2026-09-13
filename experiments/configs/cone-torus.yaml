@@ -1,0 +1,14 @@
+dataset: data/raw/cone-torus.dat
+n_runs: 20
+seed: 0
+search_best_k: true
+membership_side: target
+
+# Cone-Torus tem 400 amostras -> ~240 no treino (60%), então o k_max_bounds
+# completo do artigo (1..150) cabe com folga (compare com boat.yaml, onde
+# precisou ser reduzido por causa do tamanho pequeno do dataset).
+tuning:
+  method: ga
+  k_max_bounds: [1, 150]
+  n_agents: 15
+  n_iterations: 30

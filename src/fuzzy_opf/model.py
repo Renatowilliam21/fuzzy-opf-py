@@ -202,8 +202,20 @@ class FuzzyOPF(OPF):
             subgraph.idx_nodes.append(p)
             node.cost = heap.cost[p]
 
+            # NOTE: the `heap.color[q] != c.BLACK` check is NOT optional here,
+            # unlike in opfython's own (unweighted) `_grow_minimax_forest`.
+            # There, `current_cost = max(cost[p], weight) >= cost[p]` always,
+            # so a heap.cost[p] < heap.cost[q] with q already black (i.e.
+            # heap.cost[q] already <= any not-yet-removed cost, by the
+            # min-heap invariant) can never happen -- the check is provably
+            # redundant. Multiplying by `membership` (<= 1) breaks that
+            # guarantee: current_cost can fall below heap.cost[p] itself,
+            # so an already-finalized (black) node could otherwise get its
+            # `pred` rewritten, corrupting the forest into having a cycle
+            # (mark_nodes/prune then loops forever walking `pred`). Matches
+            # the original C's `Q->color[q] != BLACK` guard in fuzzy.c.
             for q, neighbour in enumerate(subgraph.nodes):
-                if p != q and heap.cost[p] < heap.cost[q]:
+                if p != q and heap.color[q] != c.BLACK and heap.cost[p] < heap.cost[q]:
                     weight = self.distance_fn(node.features, neighbour.features)
                     base_cost = np.maximum(heap.cost[p], weight)
 
@@ -223,31 +235,40 @@ class FuzzyOPF(OPF):
     # during training, exactly as stated in the paper)
     # ------------------------------------------------------------------ #
     def predict(self, X_val: np.ndarray) -> list[int]:
-        if self.subgraph is None or not self.subgraph.trained:
-            raise RuntimeError("Call `fit` before `predict`.")
+        """Classify samples with the pre-trained classifier.
 
-        pred_subgraph = Subgraph(X_val)
+        Delegated to ``SupervisedOPF.predict`` for the same reason as
+        ``_find_prototypes``: membership (Eq. 6) only affects training, not
+        classification, so plain OPF's implementation applies unchanged.
+        Reusing it also gives FuzzyOPF the node-relevance marking
+        (``subgraph.mark_nodes``) needed by ``prune()`` below, which our
+        previous hand-copied version silently lacked.
+        """
+        return SupervisedOPF.predict(self, X_val)
 
-        for i in range(pred_subgraph.n_nodes):
-            j = 0
-            k = self.subgraph.idx_nodes[j]
-            weight = self.distance_fn(self.subgraph.nodes[k].features, pred_subgraph.nodes[i].features)
-            min_cost = np.maximum(self.subgraph.nodes[k].cost, weight)
-            current_label = self.subgraph.nodes[k].predicted_label
+    def prune(
+        self,
+        X_train: np.ndarray,
+        Y_train: np.ndarray,
+        X_val: np.ndarray,
+        Y_val: np.ndarray,
+        n_iterations: int = 10,
+    ) -> None:
+        """Iteratively remove training samples irrelevant to validation predictions.
 
-            while (
-                j < self.subgraph.n_nodes - 1
-                and min_cost > self.subgraph.nodes[self.subgraph.idx_nodes[j + 1]].cost
-            ):
-                l = self.subgraph.idx_nodes[j + 1]
-                weight = self.distance_fn(self.subgraph.nodes[l].features, pred_subgraph.nodes[i].features)
-                tmp = np.maximum(self.subgraph.nodes[l].cost, weight)
-                if tmp < min_cost:
-                    min_cost = tmp
-                    current_label = self.subgraph.nodes[l].predicted_label
-                j += 1
-                k = l
+        Port of ``opf_pruning.c`` from the original LibOPF, via delegation to
+        ``SupervisedOPF.prune``: it only calls ``self.fit``/``self.predict``,
+        which Python resolves to FuzzyOPF's own (membership-aware) versions
+        since ``self`` is a FuzzyOPF instance -- so every pruning iteration
+        retrains a real Fuzzy-OPF, not a plain OPF. Mutates ``self`` in place
+        (matching the original's behaviour); re-fit from scratch if you need
+        the unpruned classifier again.
 
-            pred_subgraph.nodes[i].predicted_label = current_label
-
-        return [node.predicted_label for node in pred_subgraph.nodes]
+        Args:
+            X_train, Y_train: Training split (unchanged; pruning works on a
+                copy internally).
+            X_val, Y_val: Validation split used to decide which samples are
+                relevant.
+            n_iterations: Maximum number of prune/retrain cycles.
+        """
+        SupervisedOPF.prune(self, X_train, Y_train, X_val, Y_val, n_iterations)

@@ -1,0 +1,19 @@
+dataset: data/raw/thyroid.txt
+n_runs: 5
+seed: 0
+search_best_k: false
+membership_side: target
+
+# Orçamento do GA reduzido em relação a boat.yaml/cone-torus.yaml: cada
+# avaliação de fitness aqui custa ~64s (medido), contra <1s nos datasets
+# menores. Com n_agents=10 x n_iterations=6 = 60 avaliações/run, cada run
+# leva ~1h, x 5 runs = ~5h no total -- ainda longo, mas viável rodando à
+# noite. n_runs também foi reduzido de 20 (protocolo do artigo) para 5:
+# prioriza uma busca de hiperparâmetros mais completa por run em vez de
+# mais runs com busca mais pobre, dado o orçamento de tempo disponível.
+# Ajuste n_runs/n_agents/n_iterations pra cima se tiver mais tempo/paciência.
+tuning:
+  method: ga
+  k_max_bounds: [1, 100]
+  n_agents: 10
+  n_iterations: 6
