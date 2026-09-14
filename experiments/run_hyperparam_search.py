@@ -26,11 +26,14 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from opfython.math.general import opf_accuracy
-from opfython.stream.splitter import split
-
+# Import fuzzy_opf FIRST: it disables opfython's crash-prone per-module file
+# logging (see fuzzy_opf/__init__.py) before any of the opfython imports
+# below get a chance to trigger it.
 from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset, pso_search, random_search
 from fuzzy_opf.datasets import standardize
+
+from opfython.math.general import opf_accuracy
+from opfython.stream.splitter import split
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

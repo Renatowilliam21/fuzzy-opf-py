@@ -22,12 +22,15 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+# Import fuzzy_opf FIRST: it disables opfython's crash-prone per-module file
+# logging (see fuzzy_opf/__init__.py) before any of the opfython imports
+# below get a chance to trigger it.
+from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset
+from fuzzy_opf.datasets import standardize
+
 from opfython.math.general import opf_accuracy
 from opfython.models.supervised import SupervisedOPF
 from opfython.stream.splitter import split
-
-from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset
-from fuzzy_opf.datasets import standardize
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -77,8 +80,8 @@ def run(config_path: str) -> Path:
             )
             prune_time = time.time() - t0
             n_before = X_train.shape[0]
-            X_train = X_train[: pruner.subgraph.n_nodes]
-            y_train = y_train[: pruner.subgraph.n_nodes]
+            X_train = np.array([node.features for node in pruner.subgraph.nodes])
+            y_train = np.array([node.label for node in pruner.subgraph.nodes])
             print(f"[{dataset_name}] run {run_id + 1}/{n_runs}: pruned "
                   f"{n_before} -> {X_train.shape[0]} samples "
                   f"(val_acc={val_acc:.4f}, {prune_time:.1f}s)")

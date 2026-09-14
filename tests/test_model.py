@@ -170,3 +170,19 @@ def test_prune_reduces_or_keeps_training_set(toy_dataset):
 
     assert model.subgraph.n_nodes <= 60
     assert model.subgraph.trained
+
+
+def test_single_class_dataset_uses_prototype_fallback():
+    """_find_prototypes has a fallback for datasets with only one class
+    (no MST edge ever crosses a class boundary, so no prototype would
+    otherwise be found) -- exercise it explicitly."""
+    rng = np.random.default_rng(0)
+    X = rng.random((30, 4))
+    y = np.zeros(30, dtype=int)
+
+    model = FuzzyOPF(k_max=5, sigma=0.6, search_best_k=False)
+    model.fit(X, y)
+    preds = model.predict(X[:5])
+
+    assert all(p == 0 for p in preds)
+    assert any(node.status == 1 for node in model.subgraph.nodes)  # c.PROTOTYPE == 1

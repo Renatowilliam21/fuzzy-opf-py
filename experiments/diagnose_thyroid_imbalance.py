@@ -14,11 +14,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from opfython.math.general import opf_accuracy
-from opfython.stream.splitter import split
-
 from fuzzy_opf import FuzzyOPF, load_dataset
 from fuzzy_opf.datasets import standardize
+
+from opfython.math.general import opf_accuracy
+from opfython.stream.splitter import split
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 

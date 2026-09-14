@@ -1,0 +1,193 @@
+2026-09-13 00:05:48,164 - opytimizer.core.optimizer — DEBUG — Algorithm: GA | Custom Parameters: None | Built: True.
+2026-09-13 00:05:48,165 - opytimizer.optimizers.single_objective.evolutionary.ga — INFO — Class overrided.
+2026-09-13 00:05:48,165 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 00:05:48,166 - opytimizer.core.space — DEBUG — Agents: 4 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [10.   1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 00:05:48,167 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 00:05:48,179 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 00:05:48,179 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 00:05:48,179 - opytimizer.core.function — INFO — Class created.
+2026-09-13 00:05:48,179 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 00:05:48,180 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x000001A9FE1B6BA0> | Optimizer: <opytimizer.optimizers.single_objective.evolutionary.ga.GA object at 0x000001A9DB667CB0>| Function: <opytimizer.core.function.Function object at 0x000001A9FE1B6CF0>.
+2026-09-13 00:05:48,180 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 00:05:48,180 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 00:05:48,263 - opytimizer.opytimizer — INFO — Iteration 1/3
+2026-09-13 00:05:48,347 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 00:05:48,348 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 00:05:48,348 - opytimizer.opytimizer — INFO — Iteration 2/3
+2026-09-13 00:05:48,438 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 00:05:48,438 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 00:05:48,438 - opytimizer.opytimizer — INFO — Iteration 3/3
+2026-09-13 00:05:48,520 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 00:05:48,520 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 00:05:48,520 - opytimizer.opytimizer — INFO — Optimization task ended.
+2026-09-13 00:05:48,521 - opytimizer.opytimizer — INFO — It took 0.3406107425689697 seconds.
+2026-09-13 00:05:48,524 - opytimizer.core.optimizer — DEBUG — Algorithm: GA | Custom Parameters: None | Built: True.
+2026-09-13 00:05:48,524 - opytimizer.optimizers.single_objective.evolutionary.ga — INFO — Class overrided.
+2026-09-13 00:05:48,524 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 00:05:48,524 - opytimizer.core.space — DEBUG — Agents: 4 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [10.   1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 00:05:48,525 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 00:05:48,525 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 00:05:48,525 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 00:05:48,525 - opytimizer.core.function — INFO — Class created.
+2026-09-13 00:05:48,525 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 00:05:48,525 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x000001A9FE271450> | Optimizer: <opytimizer.optimizers.single_objective.evolutionary.ga.GA object at 0x000001A9FE271090>| Function: <opytimizer.core.function.Function object at 0x000001A9FE271590>.
+2026-09-13 00:05:48,525 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 00:05:48,525 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 00:05:48,609 - opytimizer.opytimizer — INFO — Iteration 1/3
+2026-09-13 00:05:48,691 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 00:05:48,692 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 00:05:48,692 - opytimizer.opytimizer — INFO — Iteration 2/3
+2026-09-13 00:05:48,774 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 00:05:48,774 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 00:05:48,775 - opytimizer.opytimizer — INFO — Iteration 3/3
+2026-09-13 00:05:48,857 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 00:05:48,858 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 00:05:48,858 - opytimizer.opytimizer — INFO — Optimization task ended.
+2026-09-13 00:05:48,858 - opytimizer.opytimizer — INFO — It took 0.332827091217041 seconds.
+2026-09-13 00:12:50,453 - opytimizer.core.optimizer — DEBUG — Algorithm: GA | Custom Parameters: None | Built: True.
+2026-09-13 00:12:50,454 - opytimizer.optimizers.single_objective.evolutionary.ga — INFO — Class overrided.
+2026-09-13 00:12:50,456 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 00:12:50,457 - opytimizer.core.space — DEBUG — Agents: 10 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [100.    1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 00:12:50,459 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 00:12:50,459 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 00:12:50,460 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 00:12:50,460 - opytimizer.core.function — INFO — Class created.
+2026-09-13 00:12:50,460 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 00:12:50,461 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x000001F52EA3CD70> | Optimizer: <opytimizer.optimizers.single_objective.evolutionary.ga.GA object at 0x000001F52EA3F380>| Function: <opytimizer.core.function.Function object at 0x000001F52EA3F4D0>.
+2026-09-13 00:12:50,461 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 00:12:50,461 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 01:04:17,667 - opytimizer.opytimizer — INFO — Iteration 1/2
+2026-09-13 01:34:52,039 - opytimizer.opytimizer — INFO — Fitness: 0.24406629529960633
+2026-09-13 01:34:52,040 - opytimizer.opytimizer — INFO — Position: [[44.32113392]
+ [ 1.091773  ]]
+2026-09-13 01:34:52,041 - opytimizer.opytimizer — INFO — Iteration 2/2
+2026-09-13 02:09:47,265 - opytimizer.opytimizer — INFO — Fitness: 0.24406629529960633
+2026-09-13 02:09:47,265 - opytimizer.opytimizer — INFO — Position: [[44.32113392]
+ [ 1.091773  ]]
+2026-09-13 02:09:47,266 - opytimizer.opytimizer — INFO — Optimization task ended.
+2026-09-13 02:09:47,266 - opytimizer.opytimizer — INFO — It took 7016.804550886154 seconds.
+2026-09-13 02:15:15,450 - opytimizer.optimizers.single_objective.swarm.pso — INFO — Overriding class: Optimizer -> PSO.
+2026-09-13 02:15:15,451 - opytimizer.core.optimizer — DEBUG — Algorithm: PSO | Custom Parameters: None | Built: True.
+2026-09-13 02:15:15,452 - opytimizer.optimizers.single_objective.swarm.pso — INFO — Class overrided.
+2026-09-13 02:15:15,453 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 02:15:15,454 - opytimizer.core.space — DEBUG — Agents: 10 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [100.    1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 02:15:15,457 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 02:15:15,457 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 02:15:15,458 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 02:15:15,459 - opytimizer.core.function — INFO — Class created.
+2026-09-13 02:15:15,459 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 02:15:15,460 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x000001F54655ED50> | Optimizer: <opytimizer.optimizers.single_objective.swarm.pso.PSO object at 0x000001F52EA3F380>| Function: <opytimizer.core.function.Function object at 0x000001F54655EE90>.
+2026-09-13 02:15:15,460 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 02:15:15,461 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 09:20:50,817 - opytimizer.opytimizer — INFO — Iteration 1/2
+2026-09-13 10:02:28,765 - opytimizer.opytimizer — INFO — Fitness: 0.24406629529960633
+2026-09-13 10:02:28,768 - opytimizer.opytimizer — INFO — Position: [[44.32113392]
+ [ 1.091773  ]]
+2026-09-13 10:02:28,769 - opytimizer.opytimizer — INFO — Iteration 2/2
+2026-09-13 10:45:56,351 - opytimizer.core.optimizer — DEBUG — Algorithm: GA | Custom Parameters: None | Built: True.
+2026-09-13 10:45:56,354 - opytimizer.optimizers.single_objective.evolutionary.ga — INFO — Class overrided.
+2026-09-13 10:45:56,356 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 10:45:56,359 - opytimizer.core.space — DEBUG — Agents: 4 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [10.   1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 10:45:56,366 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 10:45:56,367 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 10:45:56,370 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 10:45:56,370 - opytimizer.core.function — INFO — Class created.
+2026-09-13 10:45:56,370 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 10:45:56,371 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x0000022B2A4C6BA0> | Optimizer: <opytimizer.optimizers.single_objective.evolutionary.ga.GA object at 0x0000022B07987CB0>| Function: <opytimizer.core.function.Function object at 0x0000022B2A4C6CF0>.
+2026-09-13 10:45:56,372 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 10:45:56,372 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 10:45:56,901 - opytimizer.opytimizer — INFO — Iteration 1/3
+2026-09-13 10:45:57,338 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 10:45:57,339 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 10:45:57,339 - opytimizer.opytimizer — INFO — Iteration 2/3
+2026-09-13 10:45:57,874 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 10:45:57,875 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 10:45:57,876 - opytimizer.opytimizer — INFO — Iteration 3/3
+2026-09-13 10:45:58,389 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 10:45:58,390 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 10:45:58,392 - opytimizer.opytimizer — INFO — Optimization task ended.
+2026-09-13 10:45:58,393 - opytimizer.opytimizer — INFO — It took 2.0193729400634766 seconds.
+2026-09-13 10:45:58,405 - opytimizer.core.optimizer — DEBUG — Algorithm: GA | Custom Parameters: None | Built: True.
+2026-09-13 10:45:58,406 - opytimizer.optimizers.single_objective.evolutionary.ga — INFO — Class overrided.
+2026-09-13 10:45:58,408 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 10:45:58,409 - opytimizer.core.space — DEBUG — Agents: 4 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [10.   1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 10:45:58,416 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 10:45:58,417 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 10:45:58,418 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 10:45:58,419 - opytimizer.core.function — INFO — Class created.
+2026-09-13 10:45:58,419 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 10:45:58,420 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x0000022B2A581450> | Optimizer: <opytimizer.optimizers.single_objective.evolutionary.ga.GA object at 0x0000022B2A581090>| Function: <opytimizer.core.function.Function object at 0x0000022B2A581590>.
+2026-09-13 10:45:58,420 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 10:45:58,420 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 10:45:58,945 - opytimizer.opytimizer — INFO — Iteration 1/3
+2026-09-13 10:45:59,440 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 10:45:59,441 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 10:45:59,442 - opytimizer.opytimizer — INFO — Iteration 2/3
+2026-09-13 10:45:59,920 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 10:45:59,921 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 10:45:59,921 - opytimizer.opytimizer — INFO — Iteration 3/3
+2026-09-13 10:46:00,454 - opytimizer.opytimizer — INFO — Fitness: 0.08164983164983164
+2026-09-13 10:46:00,455 - opytimizer.opytimizer — INFO — Position: [[5.93932154]
+ [0.91518937]]
+2026-09-13 10:46:00,456 - opytimizer.opytimizer — INFO — Optimization task ended.
+2026-09-13 10:46:00,456 - opytimizer.opytimizer — INFO — It took 2.0355329513549805 seconds.
+2026-09-13 11:18:21,495 - opytimizer.core.optimizer — DEBUG — Algorithm: GA | Custom Parameters: None | Built: True.
+2026-09-13 11:18:21,520 - opytimizer.optimizers.single_objective.evolutionary.ga — INFO — Class overrided.
+2026-09-13 11:18:21,532 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 11:18:21,561 - opytimizer.core.space — DEBUG — Agents: 10 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [100.    1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 11:18:21,678 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 11:18:21,815 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 11:18:21,928 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 11:18:21,994 - opytimizer.core.function — INFO — Class created.
+2026-09-13 11:18:22,012 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 11:18:22,017 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x000001E4746FCD70> | Optimizer: <opytimizer.optimizers.single_objective.evolutionary.ga.GA object at 0x000001E4746FF380>| Function: <opytimizer.core.function.Function object at 0x000001E4746FF4D0>.
+2026-09-13 11:18:22,026 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 11:18:22,034 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 15:43:26,646 - opytimizer.core.optimizer — DEBUG — Algorithm: GA | Custom Parameters: None | Built: True.
+2026-09-13 15:43:26,648 - opytimizer.optimizers.single_objective.evolutionary.ga — INFO — Class overrided.
+2026-09-13 15:43:26,650 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 15:43:26,651 - opytimizer.core.space — DEBUG — Agents: 6 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [100.    1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 15:43:26,653 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 15:43:26,653 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 15:43:26,654 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 15:43:26,654 - opytimizer.core.function — INFO — Class created.
+2026-09-13 15:43:26,655 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 15:43:26,655 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x000002A4FD27CD70> | Optimizer: <opytimizer.optimizers.single_objective.evolutionary.ga.GA object at 0x000002A4FD27D2B0>| Function: <opytimizer.core.function.Function object at 0x000002A4FD27CEC0>.
+2026-09-13 15:43:26,656 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 15:43:26,656 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 18:35:30,089 - opytimizer.opytimizer — INFO — Iteration 1/1
+2026-09-13 20:06:47,023 - opytimizer.opytimizer — INFO — Fitness: 0.24406629529960633
+2026-09-13 20:06:47,025 - opytimizer.opytimizer — INFO — Position: [[44.32113392]
+ [ 1.091773  ]]
+2026-09-13 20:06:47,026 - opytimizer.opytimizer — INFO — Optimization task ended.
+2026-09-13 20:06:47,026 - opytimizer.opytimizer — INFO — It took 15800.369183063507 seconds.
+2026-09-13 20:11:06,297 - opytimizer.optimizers.single_objective.swarm.pso — INFO — Overriding class: Optimizer -> PSO.
+2026-09-13 20:11:06,298 - opytimizer.core.optimizer — DEBUG — Algorithm: PSO | Custom Parameters: None | Built: True.
+2026-09-13 20:11:06,299 - opytimizer.optimizers.single_objective.swarm.pso — INFO — Class overrided.
+2026-09-13 20:11:06,299 - opytimizer.spaces.search — INFO — Overriding class: Space -> SearchSpace.
+2026-09-13 20:11:06,300 - opytimizer.core.space — DEBUG — Agents: 6 | Size: (2, 1) | Objectives: 1 | Lower Bound: [1.  0.2] | Upper Bound: [100.    1.2] | Mapping: ['x0', 'x1'] | Built: True.
+2026-09-13 20:11:06,300 - opytimizer.spaces.search — INFO — Class overrided.
+2026-09-13 20:11:06,300 - opytimizer.core.function — INFO — Creating class: Function.
+2026-09-13 20:11:06,300 - opytimizer.core.function — DEBUG — Function: fitness | Built: True.
+2026-09-13 20:11:06,300 - opytimizer.core.function — INFO — Class created.
+2026-09-13 20:11:06,300 - opytimizer.opytimizer — INFO — Creating class: Opytimizer.
+2026-09-13 20:11:06,300 - opytimizer.opytimizer — DEBUG — Space: <opytimizer.spaces.search.SearchSpace object at 0x000002A48ED04F50> | Optimizer: <opytimizer.optimizers.single_objective.swarm.pso.PSO object at 0x000002A4FD27D2B0>| Function: <opytimizer.core.function.Function object at 0x000002A48ED05090>.
+2026-09-13 20:11:06,301 - opytimizer.opytimizer — INFO — Class created.
+2026-09-13 20:11:06,301 - opytimizer.opytimizer — INFO — Starting optimization task.
+2026-09-13 20:57:54,134 - opytimizer.opytimizer — INFO — Iteration 1/1
+2026-09-13 21:27:39,689 - opytimizer.opytimizer — INFO — Fitness: 0.24406629529960633
+2026-09-13 21:27:39,697 - opytimizer.opytimizer — INFO — Position: [[44.32113392]
+ [ 1.091773  ]]
+2026-09-13 21:27:39,703 - opytimizer.opytimizer — INFO — Optimization task ended.
+2026-09-13 21:27:39,703 - opytimizer.opytimizer — INFO — It took 4593.401768922806 seconds.
