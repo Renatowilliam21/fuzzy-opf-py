@@ -48,6 +48,13 @@ class TuningResult:
     sigma: float
     accuracy: float
     history: object
+    n_evaluations: int = 0
+    """Actual number of fitness evaluations performed. NOT the same as
+    n_agents * n_iterations: population-based methods (GA, PSO, ...)
+    evaluate the initial population AND every subsequent generation, so
+    the real count is typically higher than that nominal product -- this
+    field is the ground truth, measured by wrapping the fitness function
+    with a counter, not inferred from the search configuration."""
 
 
 @contextmanager
@@ -97,6 +104,7 @@ def _make_fitness(
         return cluster_model
 
     def fitness(x: np.ndarray) -> float:
+        fitness.n_calls += 1
         k_max = int(np.clip(round(x[0, 0]), k_lo, k_hi))
         sigma = float(np.clip(x[1, 0], *SIGMA_BOUNDS))
 
@@ -118,6 +126,13 @@ def _make_fitness(
 
         # opytimizer minimizes by default -> minimize the error.
         return 1.0 - acc
+
+    # Ground-truth evaluation counter: population-based optimizers call
+    # this once per agent for the initial population AND again after every
+    # generation's update, so the real count is typically higher than the
+    # nominal n_agents * n_iterations "budget" -- read after the search
+    # completes (see _run_metaheuristic_search / random_search).
+    fitness.n_calls = 0
 
     return fitness
 
@@ -160,11 +175,10 @@ def _run_metaheuristic_search(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
         )
-        function = Function(
-            _make_fitness(
-                X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance
-            )
+        fitness_fn = _make_fitness(
+            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance
         )
+        function = Function(fitness_fn)
 
         task = Opytimizer(space, optimizer, function, save_agents=False)
         history = task.start(n_iterations=n_iterations)
@@ -174,7 +188,10 @@ def _run_metaheuristic_search(
     best_sigma = float(np.clip(best_agent.position[1, 0], *SIGMA_BOUNDS))
     best_acc = 1.0 - float(best_agent.fit)
 
-    return TuningResult(k_max=best_k_max, sigma=best_sigma, accuracy=best_acc, history=history)
+    return TuningResult(
+        k_max=best_k_max, sigma=best_sigma, accuracy=best_acc, history=history,
+        n_evaluations=fitness_fn.n_calls,
+    )
 
 
 def genetic_search(
@@ -319,4 +336,7 @@ def random_search(
         if acc > best_acc:
             best_k_max, best_sigma, best_acc = k_max, sigma, acc
 
-    return TuningResult(k_max=best_k_max, sigma=best_sigma, accuracy=best_acc, history=trace)
+    return TuningResult(
+        k_max=best_k_max, sigma=best_sigma, accuracy=best_acc, history=trace,
+        n_evaluations=fitness.n_calls,
+    )

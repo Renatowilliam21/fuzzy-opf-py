@@ -1,6 +1,6 @@
-﻿"""Compares hyperparameter search methods for Fuzzy-OPF under a matched
+"""Compares hyperparameter search methods for Fuzzy-OPF under a matched
 evaluation budget: GA, PSO, and random search (the "negative control" --
-any method that doesn'"'"'t beat it isn'"'"'t earning its complexity).
+any method that doesn't beat it isn't earning its complexity).
 
 Same train/val/test split for every method (fair comparison), optional
 pruning applied once before all of them (so the comparison reflects search
@@ -78,6 +78,10 @@ def run(config_path: str) -> Path:
         membership_side=membership_side, seed=seed,
     )
 
+    # n_agents x n_iterations must equal `budget` for a fair comparison
+    # against random_search's n_evaluations. Favors more agents (broader
+    # per-generation exploration) over more generations when budget doesn't
+    # factor evenly -- a reasonable default, not the only valid choice.
     n_agents = max(1, min(10, budget))
     n_iterations = max(1, budget // n_agents)
     actual_budget = n_agents * n_iterations
@@ -102,10 +106,12 @@ def run(config_path: str) -> Path:
         test_acc = opf_accuracy(y_test, model.predict(X_test))
 
         print(f"{name:8s}: k_max={result.k_max:4d} sigma={result.sigma:.3f} "
-              f"val_acc={result.accuracy:.4f} test_acc={test_acc:.4f} ({wall_seconds:.1f}s)")
+              f"val_acc={result.accuracy:.4f} test_acc={test_acc:.4f} "
+              f"({wall_seconds:.1f}s, {result.n_evaluations} real evaluations, "
+              f"{wall_seconds / max(result.n_evaluations, 1):.1f}s/eval)")
 
         rows.append([name, result.k_max, f"{result.sigma:.4f}", f"{result.accuracy:.4f}",
-                     f"{test_acc:.4f}", f"{wall_seconds:.1f}", actual_budget])
+                     f"{test_acc:.4f}", f"{wall_seconds:.1f}", result.n_evaluations])
 
     out_dir = REPO_ROOT / "results" / dataset_name
     out_dir.mkdir(parents=True, exist_ok=True)
