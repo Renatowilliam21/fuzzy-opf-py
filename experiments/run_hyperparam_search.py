@@ -82,10 +82,19 @@ def run(config_path: str) -> Path:
     )
 
     # n_agents x n_iterations must equal `budget` for a fair comparison
-    # against random_search's n_evaluations. Favors more agents (broader
-    # per-generation exploration) over more generations when budget doesn't
-    # factor evenly -- a reasonable default, not the only valid choice.
-    n_agents = max(1, min(10, budget))
+    # against random_search's n_evaluations. Fixed, small population (3
+    # agents) so nearly all of the budget goes into ITERATIONS instead --
+    # the opposite of the original heuristic here, which capped n_agents at
+    # min(10, budget) and left n_iterations=1 for any budget <= 10. With
+    # n_iterations=1, GA/PSO never actually evolve (no crossover/mutation/
+    # velocity update ever applies): they just evaluate an initial random
+    # population once and stop, which is only a thin disguise for random
+    # search -- confirmed empirically on Thyroid, where a second seed
+    # reversed which "method" looked better, because both were really just
+    # sampling luck. budget should be >= ~12 for this to give at least 3-4
+    # real generations; smaller budgets will still run but the comparison
+    # is not meaningful (same failure mode this comment describes).
+    n_agents = 3
     n_iterations = max(1, budget // n_agents)
     actual_budget = n_agents * n_iterations
 
