@@ -27,6 +27,7 @@ from opfython.models.supervised import SupervisedOPF
 from opfython.stream.splitter import split
 
 from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset
+from fuzzy_opf.datasets import standardize
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,6 +42,8 @@ def run(config_path: str) -> Path:
     search_best_k = config.get("search_best_k", True)
     membership_side = config.get("membership_side", "target")
     base_seed = config.get("seed", 0)
+    prune_cfg = config.get("prune")  # None (default) disables pruning entirely
+    normalize = config.get("normalize", False)
 
     X, y = load_dataset(dataset_path)
 
@@ -50,6 +53,35 @@ def run(config_path: str) -> Path:
 
         X_train, X_rest, y_train, y_rest = split(X, y, percentage=0.6, random_state=seed)
         X_val, X_test, y_val, y_test = split(X_rest, y_rest, percentage=0.5, random_state=seed)
+
+        if normalize:
+            X_train, X_val, X_test = standardize(X_train, X_val, X_test)
+
+        # --- Optional pruning: shrink the training set once per run, before
+        # both the OPF baseline and the (possibly GA-driven) Fuzzy-OPF reuse
+        # it. This is where the speedup actually pays off for large datasets
+        # (e.g. Thyroid) -- pruning is O(n^2) itself, so doing it once per
+        # run and then training many times on the smaller set is what makes
+        # it worthwhile, as opposed to pruning inside every GA evaluation.
+        if prune_cfg is not None:
+            t0 = time.time()
+            pruner = FuzzyOPF(
+                k_max=prune_cfg.get("k_max", 20),
+                sigma=prune_cfg.get("sigma", 0.6),
+                search_best_k=search_best_k,
+                membership_side=membership_side,
+            )
+            val_acc = pruner.prune_best(
+                X_train, y_train, X_val, y_val,
+                n_iterations=prune_cfg.get("n_iterations", 5),
+            )
+            prune_time = time.time() - t0
+            n_before = X_train.shape[0]
+            X_train = X_train[: pruner.subgraph.n_nodes]
+            y_train = y_train[: pruner.subgraph.n_nodes]
+            print(f"[{dataset_name}] run {run_id + 1}/{n_runs}: pruned "
+                  f"{n_before} -> {X_train.shape[0]} samples "
+                  f"(val_acc={val_acc:.4f}, {prune_time:.1f}s)")
 
         # --- Standard OPF (baseline) ---
         t0 = time.time()

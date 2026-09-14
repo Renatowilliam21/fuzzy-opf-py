@@ -1,0 +1,13 @@
+﻿dataset: data/raw/thyroid.txt
+seed: 0
+search_best_k: false
+membership_side: target
+k_max_bounds: [1, 100]
+normalize: true
+
+# Orcamento bem reduzido: a poda nao ajudou neste dataset (o modelo
+# completo superou toda tentativa podada), entao a busca roda no conjunto
+# inteiro (4320 amostras). Com cada treino levando 300-700s nesse tamanho,
+# budget=6 (3 agentes x 2 iteracoes) ja significa ~18 treinos completos
+# entre os 3 metodos (GA+PSO+Random), facilmente 1-2h.
+budget: 6

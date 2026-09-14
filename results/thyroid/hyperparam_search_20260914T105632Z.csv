@@ -1,0 +1,4 @@
+method,k_max,sigma,val_accuracy,test_accuracy,wall_seconds,n_evaluations
+ga,44,1.0918,0.7559,0.7546,15800.4,6
+pso,44,1.0918,0.7559,0.7546,4593.9,6
+random,2,1.1128,0.7492,0.7553,36001.1,6
