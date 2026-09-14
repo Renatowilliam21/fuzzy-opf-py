@@ -1,0 +1,7 @@
+﻿dataset: data/raw/thyroid.txt
+seed: 0
+search_best_k: false
+membership_side: target
+k_max_bounds: [20, 20]
+normalize: true
+budget: 5
