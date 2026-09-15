@@ -1,0 +1,18 @@
+dataset: data/raw/cone-torus.dat
+n_runs: 20
+seed: 0
+membership_side: source
+
+# Idêntico a cone-torus.yaml, exceto membership_side -- teste para decidir
+# se "target" (Eq. 6 do artigo) ou "source" (comportamento do C original)
+# reproduz melhor a Tabela I publicada (Cone-Torus: Fuzzy-OPF = 0.8346).
+
+# search_best_k: false -- ver cone-torus.yaml para a explicação completa
+# (evita busca interna redundante de k dentro do GA).
+search_best_k: false
+
+tuning:
+  method: ga
+  k_max_bounds: [1, 150]
+  n_agents: 15
+  n_iterations: 30

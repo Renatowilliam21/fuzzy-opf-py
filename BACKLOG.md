@@ -6,10 +6,17 @@ extensões para priorizar depois.
 
 ## Validação científica (alta prioridade — afeta a confiabilidade dos números)
 
-- [ ] **Resolver `membership_side`**: comparar `"target"` (segue a Eq. 6 do
+- [x] **Resolver `membership_side`**: comparar `"target"` (segue a Eq. 6 do
   artigo) vs. `"source"` (reproduz o comportamento do C original) nos
-  datasets do paper e ver qual bate com a Tabela I publicada. Hoje os dois
-  existem como opção, mas nenhum foi validado contra os números originais.
+  datasets do paper e ver qual bate com a Tabela I publicada. **Resolvido:
+  `"target"` é a escolha correta.** Testado em Boat e Cone-Torus (20 runs
+  cada, protocolo idêntico exceto `membership_side`): no Boat os dois
+  modos empatam (dataset fácil demais, ~99% de acurácia, sem espaço para
+  a diferença aparecer); no Cone-Torus (mais difícil, ~85%), só `"target"`
+  reproduz o padrão qualitativo do artigo (Fuzzy-OPF > OPF, +0.0020 vs.
+  +0.0074 no artigo) -- `"source"` empata exatamente com o OPF padrão, sem
+  vantagem nenhuma. `"target"` passa a ser o padrão recomendado; `"source"`
+  fica disponível só para quem quiser reproduzir o comportamento do C.
 - [x] **Confirmar com uma segunda seed** se o Random search realmente perde
   de GA/PSO no Thyroid de forma consistente — **resolvido, com resposta
   diferente da esperada**: não perde de forma consistente. Após corrigir o

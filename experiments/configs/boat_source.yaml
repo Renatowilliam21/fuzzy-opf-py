@@ -1,0 +1,18 @@
+dataset: data/raw/boat.dat
+n_runs: 20
+seed: 0
+search_best_k: true
+membership_side: source
+
+# Idêntico a boat.yaml, exceto membership_side -- teste para decidir se
+# "target" (Eq. 6 do artigo) ou "source" (comportamento do C original)
+# reproduz melhor a Tabela I publicada (Boat: Fuzzy-OPF = 0.9929).
+
+# IMPORTANT: opfython requires k_max < n_nodes in the *training* split (60%
+# of the dataset here). Boat has ~100 samples total -> ~60 in training, so
+# k_max_bounds must stay comfortably below that.
+tuning:
+  method: ga
+  k_max_bounds: [1, 40]
+  n_agents: 15
+  n_iterations: 30
