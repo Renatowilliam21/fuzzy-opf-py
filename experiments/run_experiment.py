@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # logging (see fuzzy_opf/__init__.py) before any of the opfython imports
 # below get a chance to trigger it.
 from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset
-from fuzzy_opf.datasets import standardize
+from fuzzy_opf.datasets import standardize, stratified_split
 
 from opfython.math.general import opf_accuracy
 from opfython.models.supervised import SupervisedOPF
@@ -47,6 +47,7 @@ def run(config_path: str) -> Path:
     base_seed = config.get("seed", 0)
     prune_cfg = config.get("prune")  # None (default) disables pruning entirely
     normalize = config.get("normalize", False)
+    stratified = config.get("stratified", False)
 
     X, y = load_dataset(dataset_path)
 
@@ -54,8 +55,9 @@ def run(config_path: str) -> Path:
     for run_id in range(n_runs):
         seed = base_seed + run_id
 
-        X_train, X_rest, y_train, y_rest = split(X, y, percentage=0.6, random_state=seed)
-        X_val, X_test, y_val, y_test = split(X_rest, y_rest, percentage=0.5, random_state=seed)
+        splitter = stratified_split if stratified else split
+        X_train, X_rest, y_train, y_rest = splitter(X, y, percentage=0.6, random_state=seed)
+        X_val, X_test, y_val, y_test = splitter(X_rest, y_rest, percentage=0.5, random_state=seed)
 
         if normalize:
             X_train, X_val, X_test = standardize(X_train, X_val, X_test)

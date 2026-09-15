@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # logging (see fuzzy_opf/__init__.py) before any of the opfython imports
 # below get a chance to trigger it.
 from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset, pso_search, random_search
-from fuzzy_opf.datasets import standardize
+from fuzzy_opf.datasets import standardize, stratified_split
 
 from opfython.math.general import opf_accuracy
 from opfython.stream.splitter import split
@@ -50,10 +50,12 @@ def run(config_path: str) -> Path:
     budget = config.get("budget", 30)
     prune_cfg = config.get("prune")
     normalize = config.get("normalize", False)
+    stratified = config.get("stratified", False)
 
     X, y = load_dataset(dataset_path)
-    X_train, X_rest, y_train, y_rest = split(X, y, percentage=0.6, random_state=seed)
-    X_val, X_test, y_val, y_test = split(X_rest, y_rest, percentage=0.5, random_state=seed)
+    splitter = stratified_split if stratified else split
+    X_train, X_rest, y_train, y_rest = splitter(X, y, percentage=0.6, random_state=seed)
+    X_val, X_test, y_val, y_test = splitter(X_rest, y_rest, percentage=0.5, random_state=seed)
 
     if normalize:
         X_train, X_val, X_test = standardize(X_train, X_val, X_test)
@@ -98,10 +100,15 @@ def run(config_path: str) -> Path:
     n_iterations = max(1, budget // n_agents)
     actual_budget = n_agents * n_iterations
 
+    # Shared across all three methods below: when k_max is fixed (or its
+    # range is narrow), a k_max already clustered by GA is reused by PSO
+    # and Random instead of reclustered from scratch.
+    cluster_cache: dict = {}
+
     methods = {
-        "ga": lambda: genetic_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, **common),
-        "pso": lambda: pso_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, **common),
-        "random": lambda: random_search(X_train, y_train, X_val, y_val, n_evaluations=actual_budget, **common),
+        "ga": lambda: genetic_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, cluster_cache=cluster_cache, **common),
+        "pso": lambda: pso_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, cluster_cache=cluster_cache, **common),
+        "random": lambda: random_search(X_train, y_train, X_val, y_val, n_evaluations=actual_budget, cluster_cache=cluster_cache, **common),
     }
 
     rows = []

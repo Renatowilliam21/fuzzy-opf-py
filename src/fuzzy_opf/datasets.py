@@ -82,3 +82,48 @@ def standardize(X_train: np.ndarray, *others: np.ndarray) -> tuple[np.ndarray, .
     for X in others:
         scaled.append((X - mean) / std)
     return tuple(scaled)
+
+
+def stratified_split(
+    X: np.ndarray,
+    y: np.ndarray,
+    percentage: float,
+    random_state: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Like ``opfython.stream.splitter.split``, but keeps each class's
+    proportion the same in both output splits.
+
+    ``opfython``'s own ``split()`` is a plain random permutation with no
+    stratification. For a severely imbalanced dataset (e.g. Thyroid: ~92%
+    of one class, ~1.4%/2.9% the other two), an unlucky draw can shift a
+    minority class's representation between train/val/test noticeably --
+    with only ~100-200 minority samples total, a few percentage points of
+    imbalance in the draw is a real fraction of the class. Splitting each
+    class separately at the same ``percentage`` and concatenating removes
+    that source of noise.
+
+    Args:
+        X, y: Full dataset.
+        percentage: Fraction to keep in the first split (e.g. 0.6 for a
+            60/40 split). Same convention as opfython's split().
+        random_state: Seed for reproducibility.
+
+    Returns:
+        (X_1, X_2, Y_1, Y_2), same order/convention as opfython's split().
+    """
+    rng = np.random.default_rng(random_state)
+
+    idx_1, idx_2 = [], []
+    for label in np.unique(y):
+        class_idx = np.flatnonzero(y == label)
+        rng.shuffle(class_idx)
+        cut = round(len(class_idx) * percentage)
+        idx_1.extend(class_idx[:cut])
+        idx_2.extend(class_idx[cut:])
+
+    idx_1 = np.array(idx_1)
+    idx_2 = np.array(idx_2)
+    rng.shuffle(idx_1)  # undo the class-grouped order within each split
+    rng.shuffle(idx_2)
+
+    return X[idx_1], X[idx_2], y[idx_1], y[idx_2]

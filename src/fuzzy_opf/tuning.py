@@ -21,7 +21,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Callable
 
 import numpy as np
@@ -88,20 +87,33 @@ def _make_fitness(
     search_best_k: bool,
     membership_side: str,
     distance: str,
+    cluster_cache: dict | None = None,
 ) -> Callable[[np.ndarray], float]:
-    """Builds the objective evaluated by the meta-heuristic (minimization)."""
+    """Builds the objective evaluated by the meta-heuristic (minimization).
+
+    Args:
+        cluster_cache: Optional dict shared across multiple search() calls
+            (e.g. genetic_search, pso_search, random_search run back-to-back
+            in the same comparison) so a k_max already clustered by one
+            method is reused by the next instead of recomputed. Pass the
+            same dict to each call to share it; omit for a private,
+            call-local cache (the previous behaviour).
+    """
 
     k_lo, k_hi = k_max_bounds
+    cache = {} if cluster_cache is None else cluster_cache
 
     # Cache the *unsupervised* step per k_max: independent of sigma, so an
     # agent revisiting a k_max already tried by another agent/generation
-    # skips the expensive clustering step entirely.
-    @lru_cache(maxsize=None)
+    # (or by a different search method entirely, if `cluster_cache` is
+    # shared) skips the expensive clustering step entirely.
     def _cached_cluster_model(k_max: int) -> UnsupervisedOPF:
-        min_k = 1 if search_best_k else k_max
-        cluster_model = UnsupervisedOPF(min_k=min_k, max_k=k_max, distance=distance)
-        cluster_model.fit(X_train, Y_train)
-        return cluster_model
+        if k_max not in cache:
+            min_k = 1 if search_best_k else k_max
+            cluster_model = UnsupervisedOPF(min_k=min_k, max_k=k_max, distance=distance)
+            cluster_model.fit(X_train, Y_train)
+            cache[k_max] = cluster_model
+        return cache[k_max]
 
     def fitness(x: np.ndarray) -> float:
         fitness.n_calls += 1
@@ -150,6 +162,7 @@ def _run_metaheuristic_search(
     membership_side: str,
     distance: str,
     seed: int | None,
+    cluster_cache: dict | None = None,
 ) -> TuningResult:
     """Shared core behind genetic_search/pso_search/cem_search.
 
@@ -176,7 +189,8 @@ def _run_metaheuristic_search(
             upper_bound=upper_bound,
         )
         fitness_fn = _make_fitness(
-            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance
+            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance,
+            cluster_cache=cluster_cache,
         )
         function = Function(fitness_fn)
 
@@ -206,6 +220,7 @@ def genetic_search(
     membership_side: str = "target",
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
+    cluster_cache: dict | None = None,
 ) -> TuningResult:
     """Finds (k_max, sigma) with a Genetic Algorithm instead of grid search.
 
@@ -229,6 +244,7 @@ def genetic_search(
     return _run_metaheuristic_search(
         GA(), X_train, Y_train, X_val, Y_val, k_max_bounds,
         n_agents, n_iterations, search_best_k, membership_side, distance, seed,
+        cluster_cache=cluster_cache,
     )
 
 
@@ -244,6 +260,7 @@ def pso_search(
     membership_side: str = "target",
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
+    cluster_cache: dict | None = None,
 ) -> TuningResult:
     """Same search as genetic_search, but driven by Particle Swarm
     Optimization instead of a Genetic Algorithm. Same signature/semantics;
@@ -251,6 +268,7 @@ def pso_search(
     return _run_metaheuristic_search(
         PSO(), X_train, Y_train, X_val, Y_val, k_max_bounds,
         n_agents, n_iterations, search_best_k, membership_side, distance, seed,
+        cluster_cache=cluster_cache,
     )
 
 
@@ -266,6 +284,7 @@ def cem_search(
     membership_side: str = "target",
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
+    cluster_cache: dict | None = None,
 ) -> TuningResult:
     """Same search as genetic_search, but driven by the Cross-Entropy
     Method: instead of evolving a population via crossover/mutation (GA) or
@@ -287,6 +306,7 @@ def cem_search(
     return _run_metaheuristic_search(
         CEM(), X_train, Y_train, X_val, Y_val, k_max_bounds,
         n_agents, n_iterations, search_best_k, membership_side, distance, seed,
+        cluster_cache=cluster_cache,
     )
 
 
@@ -301,6 +321,7 @@ def random_search(
     membership_side: str = "target",
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
+    cluster_cache: dict | None = None,
 ) -> TuningResult:
     """Uniform random sampling of (k_max, sigma) -- the "negative control"
     for the comparison: any metaheuristic that fails to beat this on a
@@ -320,7 +341,8 @@ def random_search(
     k_lo, k_hi = k_max_bounds
 
     fitness = _make_fitness(
-        X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance
+        X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance,
+        cluster_cache=cluster_cache,
     )
 
     trace = []

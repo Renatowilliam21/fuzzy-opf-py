@@ -186,3 +186,25 @@ def test_single_class_dataset_uses_prototype_fallback():
 
     assert all(p == 0 for p in preds)
     assert any(node.status == 1 for node in model.subgraph.nodes)  # c.PROTOTYPE == 1
+
+
+def test_stratified_split_preserves_class_proportions():
+    from fuzzy_opf.datasets import stratified_split
+
+    rng = np.random.default_rng(0)
+    n = 600
+    y = rng.choice([0, 1, 2], size=n, p=[0.05, 0.1, 0.85])
+    X = rng.random((n, 4))
+
+    X1, X2, y1, y2 = stratified_split(X, y, percentage=0.6, random_state=0)
+
+    assert X1.shape[0] == len(y1)
+    assert X2.shape[0] == len(y2)
+    assert len(y1) + len(y2) == n
+
+    original = np.bincount(y) / n
+    split1 = np.bincount(y1) / len(y1)
+    split2 = np.bincount(y2) / len(y2)
+
+    assert np.allclose(original, split1, atol=0.02)
+    assert np.allclose(original, split2, atol=0.02)
