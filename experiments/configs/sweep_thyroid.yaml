@@ -1,0 +1,7 @@
+dataset: data/raw/thyroid.txt
+seed: 0
+k_max: 20
+search_best_k: false
+membership_side: target
+normalize: true
+sigma_range: [0.2, 1.2, 0.1]
