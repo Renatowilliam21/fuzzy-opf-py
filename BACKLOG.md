@@ -29,12 +29,17 @@ extensões para priorizar depois.
   sigma≈0.92 -- bem no meio do vale, um ótimo local -- enquanto o Random,
   sorteando sem viés de vizinhança, encontrou o platô melhor por acidente.
   Resultado salvo em `results/thyroid/sigma_sweep_20260915T151530Z.csv`.
-- [ ] **NOVO, motivado pelo achado acima**: GA/PSO ficando presos num
-  ótimo local no Thyroid sugere que a população pequena (3 agentes) e o
-  orçamento baixo usados nos testes não dão diversidade suficiente para
-  escapar de vales no espaço de busca. Testar com população maior e/ou
-  múltiplos reinícios independentes (restart strategy) antes de descartar
-  GA/PSO como inadequados para esse dataset.
+- [x] **GA/PSO ficando presos num ótimo local no Thyroid** — **resolvido,
+  hipótese confirmada**. Com `n_agents=10` (vs. o padrão de 3) e
+  `budget=40`, GA e PSO passaram a convergir para `sigma≈1.11-1.13` --
+  exatamente o platô melhor identificado no sweep -- empatando com o
+  Random (que já achava essa região por sorte, mesmo com população
+  pequena). Confirma: o problema nunca foi GA/PSO serem inadequados para
+  o Thyroid, era população pequena demais (3 agentes) sem diversidade
+  para escapar do vale entre os dois platôs. `run_hyperparam_search.py`
+  agora aceita `n_agents` configurável na YAML para permitir esse tipo de
+  teste. Resultado em
+  `results/thyroid/hyperparam_search_20260917T193701Z.csv`.
 - [x] **Investigar o custo por avaliação do GA** ser ~2x o do PSO/Random no
   Thyroid — **resolvido**: era ruído da máquina Windows usada nos testes
   originais (143,6s vs. 83,3-83,5s ali). Confirmado ao rodar de novo numa

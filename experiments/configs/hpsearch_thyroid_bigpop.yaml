@@ -1,0 +1,14 @@
+dataset: data/raw/thyroid.txt
+seed: 0
+search_best_k: false
+membership_side: target
+k_max_bounds: [20, 20]
+normalize: true
+
+# Testa se uma populacao MAIOR ajuda GA/PSO a escapar do otimo local perto
+# de sigma~0.92 (achado via sweep_sigma.py: existe um vale entre sigma
+# 0.7-0.9 separando dois platos, o real melhor fica em sigma~1.1-1.2).
+# n_agents=10 (vs. o padrao de 3) da mais diversidade populacional por
+# geracao -- ao custo de menos geracoes para o mesmo orcamento nominal.
+n_agents: 10
+budget: 40
