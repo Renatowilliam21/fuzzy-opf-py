@@ -41,9 +41,26 @@ extensões para priorizar depois.
   máquina Linux dedicada: os três métodos deram tempos por avaliação
   consistentes entre si (71-75s). Não é uma característica real do
   algoritmo.
-- [ ] **Rodar nos datasets restantes do artigo** — só testamos Boat,
-  Cone-Torus e Thyroid; faltam Four-Class, Data1-5, Breast Tissue, Landsat
-  Satellite, MPEG-7 BAS (dos ~12 usados no paper original).
+- [x] **Rodar nos datasets restantes do artigo** — parcialmente resolvido.
+  Rodados com sucesso (20 runs, protocolo completo): **Data1, Data2, Data3,
+  MPEG-7 BAS**. Somando aos já validados antes (Boat, Cone-Torus, Thyroid),
+  são **7 de 12 datasets do artigo testados, com Fuzzy-OPF ≥ OPF em
+  todos** (7/7) -- reproduz a propriedade central reivindicada pelo paper.
+  Acurácias absolutas tendem a vir mais altas que o artigo em alguns casos
+  (ex.: MPEG-7 BAS: nosso ~0.90 vs. artigo ~0.80), mas a direção
+  qualitativa (Fuzzy-OPF nunca perde) se mantém.
+  Resultados em `results/{data1,data2,data3,mpeg7_BAS}/*.csv`.
+
+  **Ainda faltam**: Four-Class (fonte: LIBSVM binary datasets, não a
+  LibOPF -- ainda não conseguido; o zip baixado veio com o Landsat por
+  engano), Breast Tissue (baixado como `.xls`, ainda não convertido),
+  Landsat Satellite (convertido mas o usuário optou por não rodar por
+  ora -- **nota**: o artigo diz 5.100 amostras/8 classes, mas o dataset
+  público padrão do UCI tem 6.435 amostras/6-7 classes -- mesma
+  discrepância observada no Thyroid, então não vai bater o número exato
+  do artigo mesmo se rodado). **Inatingíveis**: Electric Industrial
+  Profiles e Electric Commercial Profiles são dados **privados** do
+  artigo, sem fonte pública -- fora de alcance permanentemente.
 - [ ] **Endereçar o desbalanceamento de classes** no Thyroid (achado real:
   classe minoritária "1" com recall de só 34%) — nenhuma técnica de
   correção (custo-sensível, oversampling, etc.) foi implementada ainda.
