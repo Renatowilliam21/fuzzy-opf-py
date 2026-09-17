@@ -1,0 +1,13 @@
+dataset: data/raw/breast-tissue.txt
+n_runs: 20
+seed: 0
+search_best_k: false
+membership_side: target
+
+# n_train ~63 (60% de 106, parecido com Boat) -> k_max_bounds reduzido com
+# folga segura abaixo do tamanho do treino.
+tuning:
+  method: ga
+  k_max_bounds: [1, 40]
+  n_agents: 15
+  n_iterations: 30

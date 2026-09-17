@@ -43,24 +43,43 @@ extensões para priorizar depois.
   algoritmo.
 - [x] **Rodar nos datasets restantes do artigo** — parcialmente resolvido.
   Rodados com sucesso (20 runs, protocolo completo): **Data1, Data2, Data3,
-  MPEG-7 BAS**. Somando aos já validados antes (Boat, Cone-Torus, Thyroid),
-  são **7 de 12 datasets do artigo testados, com Fuzzy-OPF ≥ OPF em
-  todos** (7/7) -- reproduz a propriedade central reivindicada pelo paper.
+  MPEG-7 BAS, Breast Tissue**. Somando aos já validados antes (Boat,
+  Cone-Torus, Thyroid), são **8 de 12 datasets do artigo testados**.
+
+  **Resultado misto, não 8/8**: em 7 dos 8 (Boat, Cone-Torus, Data1,
+  Data2, Data3, MPEG-7 BAS, Thyroid), Fuzzy-OPF ≥ OPF, reproduzindo a
+  propriedade central reivindicada pelo paper. **Breast Tissue é a
+  exceção**: Fuzzy-OPF ficou consistentemente ~0.005 *abaixo* do OPF em
+  duas seeds diferentes (seed=0: 0.6962 vs. 0.7018; seed=1: 0.6951 vs.
+  0.6997) -- pequeno (bem dentro de 1 desvio padrão, ~0.055, nesse dataset
+  minúsculo e ruidoso: 106 amostras, 6 classes, ~15-18 por classe), mas
+  reproduzível, não ruído de uma amostra isolada. Hipótese: a busca via GA
+  às vezes converge para um `sigma` subótimo em datasets pequenos/ruidosos
+  como este. Merece nota ao reportar resultados -- não é uma falha, mas
+  não é a garantia teórica "nunca pior" se sustentando à risca aqui.
   Acurácias absolutas tendem a vir mais altas que o artigo em alguns casos
   (ex.: MPEG-7 BAS: nosso ~0.90 vs. artigo ~0.80), mas a direção
-  qualitativa (Fuzzy-OPF nunca perde) se mantém.
-  Resultados em `results/{data1,data2,data3,mpeg7_BAS}/*.csv`.
+  qualitativa (Fuzzy-OPF raramente perde) se mantém na maioria.
+  Resultados em `results/{data1,data2,data3,mpeg7_BAS,breast-tissue}/*.csv`.
 
   **Ainda faltam**: Four-Class (fonte: LIBSVM binary datasets, não a
   LibOPF -- ainda não conseguido; o zip baixado veio com o Landsat por
-  engano), Breast Tissue (baixado como `.xls`, ainda não convertido),
-  Landsat Satellite (convertido mas o usuário optou por não rodar por
-  ora -- **nota**: o artigo diz 5.100 amostras/8 classes, mas o dataset
-  público padrão do UCI tem 6.435 amostras/6-7 classes -- mesma
+  engano), Landsat Satellite (convertido mas o usuário optou por não rodar
+  por ora -- **nota**: o artigo diz 5.100 amostras/8 classes, mas o
+  dataset público padrão do UCI tem 6.435 amostras/6-7 classes -- mesma
   discrepância observada no Thyroid, então não vai bater o número exato
-  do artigo mesmo se rodado). **Inatingíveis**: Electric Industrial
-  Profiles e Electric Commercial Profiles são dados **privados** do
+  do artigo mesmo se rodado). Breast Tissue também teve uma discrepância
+  menor: artigo diz 10 atributos, arquivo real tem 9. **Inatingíveis**:
+  Electric Industrial Profiles e Electric Commercial Profiles são dados
+  **privados** do
   artigo, sem fonte pública -- fora de alcance permanentemente.
+- [ ] **NOVO, motivado pelo achado acima**: investigar por que o Fuzzy-OPF
+  fica consistentemente (~0.005, 2 seeds) abaixo do OPF no Breast Tissue.
+  Testar se uma busca de `sigma` mais fina (grid/sweep exaustivo, como
+  fizemos no Thyroid) encontra um ponto onde Fuzzy-OPF empata ou supera o
+  OPF, ou se é uma característica real do dataset (pequeno, ruidoso,
+  poucas amostras por classe) que a garantia teórica do artigo não cobre
+  perfeitamente na prática.
 - [ ] **Endereçar o desbalanceamento de classes** no Thyroid (achado real:
   classe minoritária "1" com recall de só 34%) — nenhuma técnica de
   correção (custo-sensível, oversampling, etc.) foi implementada ainda.
