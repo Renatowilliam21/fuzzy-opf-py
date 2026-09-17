@@ -1,0 +1,11 @@
+dataset: data/raw/data1.dat
+n_runs: 20
+seed: 0
+search_best_k: false
+membership_side: target
+
+tuning:
+  method: ga
+  k_max_bounds: [1, 150]
+  n_agents: 15
+  n_iterations: 30

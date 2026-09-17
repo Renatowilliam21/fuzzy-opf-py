@@ -1,0 +1,13 @@
+dataset: data/raw/data3.dat
+n_runs: 20
+seed: 0
+search_best_k: false
+membership_side: target
+
+# n_train ~204 (60% de 340) -> k_max_bounds reduzido pela mesma razão de
+# data2.yaml.
+tuning:
+  method: ga
+  k_max_bounds: [1, 120]
+  n_agents: 15
+  n_iterations: 30
