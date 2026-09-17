@@ -73,13 +73,28 @@ extensões para priorizar depois.
   Electric Industrial Profiles e Electric Commercial Profiles são dados
   **privados** do
   artigo, sem fonte pública -- fora de alcance permanentemente.
-- [ ] **NOVO, motivado pelo achado acima**: investigar por que o Fuzzy-OPF
-  fica consistentemente (~0.005, 2 seeds) abaixo do OPF no Breast Tissue.
-  Testar se uma busca de `sigma` mais fina (grid/sweep exaustivo, como
-  fizemos no Thyroid) encontra um ponto onde Fuzzy-OPF empata ou supera o
-  OPF, ou se é uma característica real do dataset (pequeno, ruidoso,
-  poucas amostras por classe) que a garantia teórica do artigo não cobre
-  perfeitamente na prática.
+- [x] **Investigar por que o Fuzzy-OPF fica consistentemente (~0.005, 2
+  seeds) abaixo do OPF no Breast Tissue** — **resolvido**. Varredura
+  exaustiva de `sigma` (21 pontos, 0.2 a 1.2, `k_max=20` fixo) revelou a
+  causa: **a acurácia de validação fica constante (0.6787) em TODOS os 21
+  valores de sigma testados**, enquanto a acurácia de teste sobe de forma
+  monotônica com sigma (0.7677 -> 0.7888 -> 0.8066 no melhor ponto,
+  sigma~1.15-1.2). Ou seja, o conjunto de validação (só 21 amostras para 6
+  classes, ~3-4 por classe) é granular demais para distinguir entre
+  valores de sigma -- qualquer busca de hiperparâmetro (GA, PSO, o que
+  for) não tem sinal para escolher com confiança, e o "empate" na
+  validação às vezes é resolvido a favor de um sigma que performa pior no
+  teste. **Não é uma fraqueza real do Fuzzy-OPF**: é uma limitação
+  conhecida do protocolo 60/20/20 padrão em datasets muito pequenos --
+  achado metodológico genuíno, vale nota em qualquer reporte de
+  resultados. Resultado em
+  `results/breast-tissue/sigma_sweep_20260917T155218Z.csv`.
+- [ ] **NOVO, motivado pelo achado acima**: para datasets pequenos (Boat,
+  Breast Tissue, Data2, Data3, ...), considerar validação cruzada
+  (k-fold) em vez do split único 60/20/20 para escolher hiperparâmetros --
+  um conjunto de validação maior (efetivamente, via k-fold) teria mais
+  chance de distinguir entre valores de sigma que hoje empatam por
+  granularidade insuficiente.
 - [ ] **Endereçar o desbalanceamento de classes** no Thyroid (achado real:
   classe minoritária "1" com recall de só 34%) — nenhuma técnica de
   correção (custo-sensível, oversampling, etc.) foi implementada ainda.
