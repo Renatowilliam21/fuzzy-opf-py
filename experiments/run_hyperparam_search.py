@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # logging (see fuzzy_opf/__init__.py) before any of the opfython imports
 # below get a chance to trigger it.
 from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset, pso_search, random_search
-from fuzzy_opf.datasets import standardize, stratified_split, oversample_minority_classes
+from fuzzy_opf.datasets import standardize, stratified_split, apply_balance
 
 from opfython.math.general import opf_accuracy
 from opfython.stream.splitter import split
@@ -59,7 +59,7 @@ def run(config_path: str) -> Path:
     X_val, X_test, y_val, y_test = splitter(X_rest, y_rest, percentage=0.5, random_state=seed)
 
     if balance is not None:
-        X_train, y_train = oversample_minority_classes(X_train, y_train, random_state=seed, strategy=balance)
+        X_train, y_train = apply_balance(X_train, y_train, balance, random_state=seed)
 
     if normalize:
         X_train, X_val, X_test = standardize(X_train, X_val, X_test)

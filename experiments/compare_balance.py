@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from fuzzy_opf import FuzzyOPF, load_dataset, oversample_minority_classes
+from fuzzy_opf import FuzzyOPF, load_dataset, oversample_minority_classes, smote_oversample
 from fuzzy_opf.datasets import standardize
 
 from opfython.math.general import opf_accuracy
@@ -60,12 +60,17 @@ def main():
     X_val, X_test, y_val, y_test = split(X_rest, y_rest, percentage=0.5, random_state=0)
     X_train, X_val, X_test = standardize(X_train, X_val, X_test)
 
-    acc_before = evaluate(X_train, y_train, X_test, y_test, label="WITHOUT oversampling (baseline)")
+    acc_before = evaluate(X_train, y_train, X_test, y_test, label="WITHOUT balancing (baseline)")
 
-    X_train_bal, y_train_bal = oversample_minority_classes(X_train, y_train, random_state=0)
-    acc_after = evaluate(X_train_bal, y_train_bal, X_test, y_test, label="WITH oversampling (fully balanced)")
+    X_train_dup, y_train_dup = oversample_minority_classes(X_train, y_train, random_state=0)
+    acc_dup = evaluate(X_train_dup, y_train_dup, X_test, y_test, label="Plain oversampling (exact duplicates)")
 
-    print(f"\nOverall accuracy: {acc_before:.4f} -> {acc_after:.4f} ({acc_after - acc_before:+.4f})")
+    X_train_smote, y_train_smote = smote_oversample(X_train, y_train, random_state=0)
+    acc_smote = evaluate(X_train_smote, y_train_smote, X_test, y_test, label="SMOTE (synthetic, interpolated)")
+
+    print(f"\nOverall accuracy: baseline={acc_before:.4f}  "
+          f"plain_oversample={acc_dup:.4f} ({acc_dup - acc_before:+.4f})  "
+          f"smote={acc_smote:.4f} ({acc_smote - acc_before:+.4f})")
 
 
 if __name__ == "__main__":

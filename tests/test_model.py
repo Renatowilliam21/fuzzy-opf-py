@@ -229,3 +229,33 @@ def test_oversample_minority_classes():
     X_soft, y_soft = oversample_minority_classes(X, y, random_state=0, strategy=0.3)
     majority_count = np.bincount(y)[2]
     assert np.bincount(y_soft)[0] == round(majority_count * 0.3)
+
+
+def test_smote_oversample():
+    from fuzzy_opf.datasets import smote_oversample
+
+    rng = np.random.default_rng(0)
+    n = 500
+    y = rng.choice([0, 1, 2], size=n, p=[0.05, 0.1, 0.85])
+    X = rng.random((n, 4))
+
+    X_bal, y_bal = smote_oversample(X, y, random_state=0)
+    counts = np.bincount(y_bal)
+    assert counts[0] == counts[1] == counts[2]
+    assert X_bal.shape[0] == y_bal.shape[0]
+    assert X_bal.shape[0] >= X.shape[0]
+
+    # Every original row must still be present somewhere in the output.
+    for row in X:
+        assert np.any(np.all(np.isclose(row, X_bal), axis=1))
+
+    # Synthetic points must be genuinely new positions, not exact copies of
+    # any original row (the whole point of SMOTE vs. plain duplication).
+    original_set = {tuple(row) for row in X}
+    n_new = X_bal.shape[0] - X.shape[0]
+    exact_dup_count = sum(1 for row in X_bal if tuple(row) in original_set)
+    # exact_dup_count includes the n original rows themselves (kept as-is);
+    # anything beyond that would mean a synthetic point exactly duplicated one.
+    assert exact_dup_count == X.shape[0], (
+        f"expected exactly {X.shape[0]} exact matches (the originals), got {exact_dup_count}"
+    )

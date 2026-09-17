@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # logging (see fuzzy_opf/__init__.py) before any of the opfython imports
 # below get a chance to trigger it.
 from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset
-from fuzzy_opf.datasets import standardize, stratified_split, oversample_minority_classes
+from fuzzy_opf.datasets import standardize, stratified_split, apply_balance
 
 from opfython.math.general import opf_accuracy
 from opfython.models.supervised import SupervisedOPF
@@ -64,7 +64,7 @@ def run(config_path: str) -> Path:
         # val/test, which must stay a faithful sample of the real (imbalanced)
         # population to measure real-world performance honestly.
         if balance is not None:
-            X_train, y_train = oversample_minority_classes(X_train, y_train, random_state=seed, strategy=balance)
+            X_train, y_train = apply_balance(X_train, y_train, balance, random_state=seed)
 
         if normalize:
             X_train, X_val, X_test = standardize(X_train, X_val, X_test)

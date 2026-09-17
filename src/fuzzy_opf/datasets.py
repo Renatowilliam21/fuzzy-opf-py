@@ -182,3 +182,117 @@ def oversample_minority_classes(
     rng.shuffle(idx_out)
 
     return X_train[idx_out], y_train[idx_out]
+
+
+def smote_oversample(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    k_neighbors: int = 5,
+    random_state: int | None = None,
+    strategy: str = "balance",
+) -> tuple[np.ndarray, np.ndarray]:
+    """SMOTE: oversample minority classes with synthetic (interpolated)
+    points instead of exact duplicates.
+
+    Motivated by ``oversample_minority_classes`` (plain duplication) making
+    things *worse* on Thyroid: OPF competes by graph topology, and a
+    duplicate sits at the exact same position as its original, so it
+    changes nothing about who conquers nearby territory. SMOTE instead
+    places each new point strictly BETWEEN a minority sample and one of its
+    same-class nearest neighbors -- a genuinely new position that can shift
+    the local graph topology near the class boundary, which plain
+    duplication cannot do.
+
+    For each synthetic point: pick a random original minority-class sample
+    x_i, find its k nearest neighbors within the SAME class (excluding
+    itself), pick one of them (x_nn) at random, and interpolate:
+    x_new = x_i + lambda * (x_nn - x_i), lambda ~ Uniform(0, 1).
+
+    Args:
+        X_train, y_train: Training split to rebalance (never apply to
+            val/test -- same rule as oversample_minority_classes).
+        k_neighbors: Neighborhood size for interpolation. Automatically
+            reduced for classes with fewer than k_neighbors+1 samples.
+        random_state: Seed for reproducibility.
+        strategy: Same as oversample_minority_classes: "balance" (fully
+            balanced) or a float in (0, 1] (fraction of the majority
+            count).
+
+    Returns:
+        (X_resampled, y_resampled): originals plus synthetic points,
+        shuffled (not grouped by class).
+    """
+    rng = np.random.default_rng(random_state)
+
+    counts = {label: np.sum(y_train == label) for label in np.unique(y_train)}
+    majority_count = max(counts.values())
+    target = majority_count if strategy == "balance" else round(majority_count * float(strategy))
+
+    X_out = [X_train]
+    y_out = [y_train]
+
+    for label, count in counts.items():
+        n_extra = target - count
+        if n_extra <= 0:
+            continue
+
+        class_idx = np.flatnonzero(y_train == label)
+        X_class = X_train[class_idx]
+
+        if count == 1:
+            # Nothing to interpolate with -- fall back to duplicating the
+            # single available point (matches oversample_minority_classes'
+            # behaviour for this degenerate case).
+            synthetic = np.repeat(X_class, n_extra, axis=0)
+        else:
+            k = min(k_neighbors, count - 1)
+            # Brute-force pairwise distances within the class -- classes
+            # needing oversampling are, by definition, small, so this is
+            # cheap even without a KD-tree.
+            dists = np.linalg.norm(X_class[:, None, :] - X_class[None, :, :], axis=-1)
+            np.fill_diagonal(dists, np.inf)
+            neighbor_idx = np.argsort(dists, axis=1)[:, :k]
+
+            base_choices = rng.integers(0, count, size=n_extra)
+            neighbor_choices = neighbor_idx[base_choices, rng.integers(0, k, size=n_extra)]
+            lambdas = rng.uniform(0.0, 1.0, size=(n_extra, 1))
+
+            synthetic = X_class[base_choices] + lambdas * (X_class[neighbor_choices] - X_class[base_choices])
+
+        X_out.append(synthetic)
+        y_out.append(np.full(n_extra, label))
+
+    X_resampled = np.vstack(X_out)
+    y_resampled = np.concatenate(y_out)
+
+    shuffle_idx = rng.permutation(len(y_resampled))
+    return X_resampled[shuffle_idx], y_resampled[shuffle_idx]
+
+
+def apply_balance(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    balance_config,
+    random_state: int | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Dispatches to oversample_minority_classes or smote_oversample based
+    on a YAML-friendly config value, for use by the experiment scripts.
+
+    Accepts either:
+      - a bare strategy ("balance" or a float like 0.5): plain duplication
+        via oversample_minority_classes (kept for backward compatibility
+        with existing configs; SMOTE is the one that actually helped, see
+        BACKLOG.md, so prefer the dict form below for new configs).
+      - a dict: {"method": "oversample" | "smote", "strategy": ..., "k_neighbors": ...}
+    """
+    if isinstance(balance_config, dict):
+        method = balance_config.get("method", "smote")
+        strategy = balance_config.get("strategy", "balance")
+        k_neighbors = balance_config.get("k_neighbors", 5)
+    else:
+        method = "oversample"
+        strategy = balance_config
+
+    if method == "smote":
+        return smote_oversample(X_train, y_train, k_neighbors=k_neighbors, random_state=random_state, strategy=strategy)
+    return oversample_minority_classes(X_train, y_train, random_state=random_state, strategy=strategy)

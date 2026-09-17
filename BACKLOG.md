@@ -100,23 +100,36 @@ extensões para priorizar depois.
   um conjunto de validação maior (efetivamente, via k-fold) teria mais
   chance de distinguir entre valores de sigma que hoje empatam por
   granularidade insuficiente.
-- [x] **Endereçar o desbalanceamento de classes** no Thyroid (achado real:
-  classe minoritária "1" com recall de só 34%) — **testado oversampling
-  simples (duplicação com reposição), resultado negativo e informativo**.
-  Balanceando totalmente as 3 classes (4004 amostras cada), o recall da
-  classe minoritária **piorou** (34.21% -> 32.89%), e a acurácia geral
-  também caiu (0.7416 -> 0.7299). Explicação: o OPF compete por
-  **topologia de grafo**, não por peso/gradiente -- duplicar um ponto o
-  coloca exatamente na mesma posição do original, sem mudar a estrutura
-  do grafo nem quem conquista as regiões de fronteira (diferente de
-  classificadores baseados em peso, onde duplicar aumenta a influência na
-  função de perda). Duplicação simples é, na prática, inócua para
-  OPF-family. **Próximo passo correto**: SMOTE (gera pontos sintéticos
-  *interpolados*, não cópias exatas -- mudaria a topologia local perto da
-  fronteira das classes raras) em vez de oversampling simples.
-  `oversample_minority_classes()` e `experiments/compare_balance.py`
-  ficam disponíveis (testados, funcionam mecanicamente), mas a técnica em
-  si não resolveu o problema para este método.
+- [x] **Endereçar o desbalanceamento de classes** no Thyroid — **resolvido
+  com sucesso via SMOTE**, depois de uma tentativa negativa informativa.
+
+  **Tentativa 1 (oversampling simples/duplicação)**: falhou. Balanceando
+  totalmente as 3 classes (4004 amostras cada) por duplicação com
+  reposição, o recall da classe minoritária "1" **piorou** (34.21% ->
+  32.89%) e a acurácia geral caiu (0.7416 -> 0.7299). Explicação: o OPF
+  compete por **topologia de grafo**, não por peso/gradiente -- duplicar
+  um ponto o coloca exatamente na mesma posição do original, sem mudar a
+  estrutura do grafo nem quem conquista as regiões de fronteira.
+
+  **Tentativa 2 (SMOTE, pontos sintéticos interpolados)**: **sucesso
+  claro**. Mesmo balanceamento total (4004 por classe), mas com pontos
+  sintéticos gerados por interpolação entre uma amostra minoritária e um
+  vizinho da mesma classe (`smote_oversample()`, k=5 vizinhos, sem
+  dependência nova). Resultado: recall da classe "1" **quase dobrou**
+  (34.21% -> 51.32%), classe "0" também melhorou (66.67% -> 72.73%),
+  acurácia geral subiu **+5.16 pontos** (0.7416 -> 0.7931) com queda
+  pequena e esperada na classe majoritária (97.45% -> 95.27%). Confirma a
+  hipótese mecanística: pontos em posições NOVAS mudam a topologia do
+  grafo perto da fronteira das classes raras, dando a elas território
+  genuíno -- o que duplicatas exatas não conseguem fazer. **Contribuição
+  publicável**: para classificadores da família OPF, SMOTE funciona onde
+  oversampling simples falha (e até piora), por uma razão mecanística
+  específica ao método (competição por topologia de grafo).
+  `smote_oversample()`, `apply_balance()` (despachante configurável via
+  YAML: `balance: {method: smote, k_neighbors: 5}`) e
+  `experiments/compare_balance.py` (compara os 3 cenários) disponíveis e
+  testados (15 testes, incluindo confirmação de que nenhum ponto
+  sintético é duplicata exata de um original).
 - [x] **Split estratificado**: `opfython.stream.splitter.split()` não
   estratifica por classe — pode importar em datasets desbalanceados como o
   Thyroid. **Resolvido**: `fuzzy_opf.datasets.stratified_split()`

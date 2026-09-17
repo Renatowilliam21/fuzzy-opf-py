@@ -15,7 +15,14 @@ _opf_logging.get_timed_file_handler = _logging.NullHandler
 
 from .model import FuzzyOPF
 from .tuning import genetic_search, pso_search, cem_search, random_search, TuningResult
-from .datasets import load_dataset, standardize, stratified_split, oversample_minority_classes
+from .datasets import (
+    load_dataset,
+    standardize,
+    stratified_split,
+    oversample_minority_classes,
+    smote_oversample,
+    apply_balance,
+)
 
 __all__ = [
     "FuzzyOPF",
@@ -28,4 +35,6 @@ __all__ = [
     "standardize",
     "stratified_split",
     "oversample_minority_classes",
+    "smote_oversample",
+    "apply_balance",
 ]
