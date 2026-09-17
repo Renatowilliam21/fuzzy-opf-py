@@ -208,3 +208,24 @@ def test_stratified_split_preserves_class_proportions():
 
     assert np.allclose(original, split1, atol=0.02)
     assert np.allclose(original, split2, atol=0.02)
+
+
+def test_oversample_minority_classes():
+    from fuzzy_opf.datasets import oversample_minority_classes
+
+    rng = np.random.default_rng(0)
+    n = 500
+    y = rng.choice([0, 1, 2], size=n, p=[0.05, 0.1, 0.85])
+    X = rng.random((n, 4))
+
+    X_bal, y_bal = oversample_minority_classes(X, y, random_state=0)
+    counts = np.bincount(y_bal)
+    assert counts[0] == counts[1] == counts[2]  # fully balanced
+    assert X_bal.shape[0] == y_bal.shape[0]
+
+    # Originals are all kept (oversampling adds, never removes).
+    assert X_bal.shape[0] >= X.shape[0]
+
+    X_soft, y_soft = oversample_minority_classes(X, y, random_state=0, strategy=0.3)
+    majority_count = np.bincount(y)[2]
+    assert np.bincount(y_soft)[0] == round(majority_count * 0.3)

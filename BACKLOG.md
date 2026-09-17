@@ -100,9 +100,23 @@ extensões para priorizar depois.
   um conjunto de validação maior (efetivamente, via k-fold) teria mais
   chance de distinguir entre valores de sigma que hoje empatam por
   granularidade insuficiente.
-- [ ] **Endereçar o desbalanceamento de classes** no Thyroid (achado real:
-  classe minoritária "1" com recall de só 34%) — nenhuma técnica de
-  correção (custo-sensível, oversampling, etc.) foi implementada ainda.
+- [x] **Endereçar o desbalanceamento de classes** no Thyroid (achado real:
+  classe minoritária "1" com recall de só 34%) — **testado oversampling
+  simples (duplicação com reposição), resultado negativo e informativo**.
+  Balanceando totalmente as 3 classes (4004 amostras cada), o recall da
+  classe minoritária **piorou** (34.21% -> 32.89%), e a acurácia geral
+  também caiu (0.7416 -> 0.7299). Explicação: o OPF compete por
+  **topologia de grafo**, não por peso/gradiente -- duplicar um ponto o
+  coloca exatamente na mesma posição do original, sem mudar a estrutura
+  do grafo nem quem conquista as regiões de fronteira (diferente de
+  classificadores baseados em peso, onde duplicar aumenta a influência na
+  função de perda). Duplicação simples é, na prática, inócua para
+  OPF-family. **Próximo passo correto**: SMOTE (gera pontos sintéticos
+  *interpolados*, não cópias exatas -- mudaria a topologia local perto da
+  fronteira das classes raras) em vez de oversampling simples.
+  `oversample_minority_classes()` e `experiments/compare_balance.py`
+  ficam disponíveis (testados, funcionam mecanicamente), mas a técnica em
+  si não resolveu o problema para este método.
 - [x] **Split estratificado**: `opfython.stream.splitter.split()` não
   estratifica por classe — pode importar em datasets desbalanceados como o
   Thyroid. **Resolvido**: `fuzzy_opf.datasets.stratified_split()`

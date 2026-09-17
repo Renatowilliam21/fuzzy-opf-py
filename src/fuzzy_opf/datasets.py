@@ -127,3 +127,58 @@ def stratified_split(
     rng.shuffle(idx_2)
 
     return X[idx_1], X[idx_2], y[idx_1], y[idx_2]
+
+
+def oversample_minority_classes(
+    X_train: np.ndarray,
+    y_train: np.ndarray,
+    random_state: int | None = None,
+    strategy: str = "balance",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Random oversampling (with replacement) of minority classes.
+
+    Motivated by Thyroid's severe imbalance (~92%/3%/5%), where the
+    minority class had only 34% recall despite ~93% instance-level
+    accuracy overall: OPF-family classifiers let minority classes get
+    "out-competed" for graph territory during training when they are
+    heavily outnumbered. Duplicating minority-class training samples (with
+    replacement) gives them proportionally more influence in the
+    competition process, at the cost of a larger (and thus slower) training
+    set -- apply AFTER a train/val/test split, never to val/test (that
+    would let duplicated points leak between splits and inflate reported
+    accuracy).
+
+    This is plain random oversampling, not SMOTE (no synthetic
+    interpolation) -- simplest possible baseline; revisit with SMOTE
+    (e.g. via imbalanced-learn) if this proves insufficient.
+
+    Args:
+        X_train, y_train: Training split to rebalance.
+        random_state: Seed for reproducibility.
+        strategy: "balance" duplicates every non-majority class up to the
+            majority class's count (fully balanced). A float in (0, 1]
+            instead targets that fraction of the majority count (e.g. 0.5
+            brings minorities up to half the majority's size -- softer
+            rebalancing, smaller resulting training set).
+
+    Returns:
+        (X_resampled, y_resampled), shuffled (not grouped by class).
+    """
+    rng = np.random.default_rng(random_state)
+
+    counts = {label: np.sum(y_train == label) for label in np.unique(y_train)}
+    majority_count = max(counts.values())
+    target = majority_count if strategy == "balance" else round(majority_count * float(strategy))
+
+    idx_out = []
+    for label, count in counts.items():
+        class_idx = np.flatnonzero(y_train == label)
+        idx_out.extend(class_idx)  # keep all originals
+        n_extra = target - count
+        if n_extra > 0:
+            idx_out.extend(rng.choice(class_idx, size=n_extra, replace=True))
+
+    idx_out = np.array(idx_out)
+    rng.shuffle(idx_out)
+
+    return X_train[idx_out], y_train[idx_out]
