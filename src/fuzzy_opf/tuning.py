@@ -36,6 +36,7 @@ from opfython.math.general import opf_accuracy
 from opfython.models.unsupervised import UnsupervisedOPF
 
 from .model import FuzzyOPF
+from .datasets import stratified_kfold_indices
 
 # sigma bounds follow the paper's [0.2, 1.2] range.
 SIGMA_BOUNDS = (0.2, 1.2)
@@ -149,6 +150,63 @@ def _make_fitness(
     return fitness
 
 
+def _make_cv_fitness(
+    X_pool: np.ndarray,
+    Y_pool: np.ndarray,
+    cv_folds: int,
+    k_max_bounds: tuple[int, int],
+    search_best_k: bool,
+    membership_side: str,
+    distance: str,
+) -> Callable[[np.ndarray], float]:
+    """Like _make_fitness, but scores each candidate (k_max, sigma) by mean
+    accuracy over stratified k-fold cross-validation instead of a single
+    held-out validation split.
+
+    Motivated by the Breast Tissue finding: a single ~20-sample validation
+    split was too granular to distinguish between sigma values at all
+    (accuracy was completely flat across [0.2, 1.2]), which meant any
+    search method was really just guessing among ties. k-fold CV uses
+    every sample in the pool as validation data exactly once, giving a
+    much more stable signal for hyperparameter selection -- worthwhile for
+    small datasets, where the extra cost (cv_folds trainings per candidate
+    instead of 1) is still cheap in absolute terms.
+
+    NOTE: no clustering cache here (unlike _make_fitness). Each fold
+    trains on a different sample subset, so a clustering fit on one fold
+    isn't valid for another -- caching would need a (k_max, fold) key
+    instead of just k_max. Not implemented for now since this path targets
+    small, already-cheap datasets; revisit if used on something bigger.
+
+    Args:
+        X_pool, Y_pool: The full pool to run k-fold CV over (typically
+            train+val combined -- keep a separate held-out test set
+            outside this pool for the final, honest evaluation).
+        cv_folds: Number of folds (k).
+        Other args: same as _make_fitness.
+    """
+    k_lo, k_hi = k_max_bounds
+
+    def fitness(x: np.ndarray) -> float:
+        fitness.n_calls += 1
+        k_max = int(np.clip(round(x[0, 0]), k_lo, k_hi))
+        sigma = float(np.clip(x[1, 0], *SIGMA_BOUNDS))
+
+        accs = []
+        for train_idx, val_idx in stratified_kfold_indices(Y_pool, cv_folds, random_state=0):
+            model = FuzzyOPF(
+                k_max=k_max, sigma=sigma, search_best_k=search_best_k,
+                membership_side=membership_side, distance=distance,
+            )
+            model.fit(X_pool[train_idx], Y_pool[train_idx])
+            accs.append(opf_accuracy(Y_pool[val_idx], model.predict(X_pool[val_idx])))
+
+        return 1.0 - float(np.mean(accs))
+
+    fitness.n_calls = 0
+    return fitness
+
+
 def _run_metaheuristic_search(
     optimizer: Optimizer,
     X_train: np.ndarray,
@@ -163,6 +221,7 @@ def _run_metaheuristic_search(
     distance: str,
     seed: int | None,
     cluster_cache: dict | None = None,
+    cv_folds: int | None = None,
 ) -> TuningResult:
     """Shared core behind genetic_search/pso_search/cem_search.
 
@@ -172,6 +231,12 @@ def _run_metaheuristic_search(
     is the one place that builds the SearchSpace/Function/Opytimizer trio
     and seeds/restores the global RNG. Adding a new metaheuristic is just a
     new one-line wrapper calling this with a different ``optimizer``.
+
+    If cv_folds is given, X_val/Y_val are ignored entirely and X_train/
+    Y_train is treated as the FULL pool to run stratified k-fold CV over
+    (see _make_cv_fitness) -- pass your combined train+val data as
+    X_train/Y_train in that case, with a separate held-out test set kept
+    outside of this call.
     """
     n_variables = 2  # [k_max, sigma]
     lower_bound = [k_max_bounds[0], SIGMA_BOUNDS[0]]
@@ -188,10 +253,15 @@ def _run_metaheuristic_search(
             lower_bound=lower_bound,
             upper_bound=upper_bound,
         )
-        fitness_fn = _make_fitness(
-            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance,
-            cluster_cache=cluster_cache,
-        )
+        if cv_folds is not None:
+            fitness_fn = _make_cv_fitness(
+                X_train, Y_train, cv_folds, k_max_bounds, search_best_k, membership_side, distance,
+            )
+        else:
+            fitness_fn = _make_fitness(
+                X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance,
+                cluster_cache=cluster_cache,
+            )
         function = Function(fitness_fn)
 
         task = Opytimizer(space, optimizer, function, save_agents=False)
@@ -221,6 +291,7 @@ def genetic_search(
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
     cluster_cache: dict | None = None,
+    cv_folds: int | None = None,
 ) -> TuningResult:
     """Finds (k_max, sigma) with a Genetic Algorithm instead of grid search.
 
@@ -244,7 +315,7 @@ def genetic_search(
     return _run_metaheuristic_search(
         GA(), X_train, Y_train, X_val, Y_val, k_max_bounds,
         n_agents, n_iterations, search_best_k, membership_side, distance, seed,
-        cluster_cache=cluster_cache,
+        cluster_cache=cluster_cache, cv_folds=cv_folds,
     )
 
 
@@ -261,6 +332,7 @@ def pso_search(
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
     cluster_cache: dict | None = None,
+    cv_folds: int | None = None,
 ) -> TuningResult:
     """Same search as genetic_search, but driven by Particle Swarm
     Optimization instead of a Genetic Algorithm. Same signature/semantics;
@@ -268,7 +340,7 @@ def pso_search(
     return _run_metaheuristic_search(
         PSO(), X_train, Y_train, X_val, Y_val, k_max_bounds,
         n_agents, n_iterations, search_best_k, membership_side, distance, seed,
-        cluster_cache=cluster_cache,
+        cluster_cache=cluster_cache, cv_folds=cv_folds,
     )
 
 
@@ -285,6 +357,7 @@ def cem_search(
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
     cluster_cache: dict | None = None,
+    cv_folds: int | None = None,
 ) -> TuningResult:
     """Same search as genetic_search, but driven by the Cross-Entropy
     Method: instead of evolving a population via crossover/mutation (GA) or
@@ -306,7 +379,7 @@ def cem_search(
     return _run_metaheuristic_search(
         CEM(), X_train, Y_train, X_val, Y_val, k_max_bounds,
         n_agents, n_iterations, search_best_k, membership_side, distance, seed,
-        cluster_cache=cluster_cache,
+        cluster_cache=cluster_cache, cv_folds=cv_folds,
     )
 
 
@@ -322,6 +395,7 @@ def random_search(
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
     cluster_cache: dict | None = None,
+    cv_folds: int | None = None,
 ) -> TuningResult:
     """Uniform random sampling of (k_max, sigma) -- the "negative control"
     for the comparison: any metaheuristic that fails to beat this on a
@@ -340,10 +414,15 @@ def random_search(
     rng = np.random.default_rng(seed)
     k_lo, k_hi = k_max_bounds
 
-    fitness = _make_fitness(
-        X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance,
-        cluster_cache=cluster_cache,
-    )
+    if cv_folds is not None:
+        fitness = _make_cv_fitness(
+            X_train, Y_train, cv_folds, k_max_bounds, search_best_k, membership_side, distance,
+        )
+    else:
+        fitness = _make_fitness(
+            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance,
+            cluster_cache=cluster_cache,
+        )
 
     trace = []
     best_k_max, best_sigma, best_acc = None, None, -np.inf

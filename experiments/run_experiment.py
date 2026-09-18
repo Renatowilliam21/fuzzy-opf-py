@@ -49,6 +49,7 @@ def run(config_path: str) -> Path:
     normalize = config.get("normalize", False)
     stratified = config.get("stratified", False)
     balance = config.get("balance")  # None (default) disables oversampling
+    cv_folds = config.get("cv_folds")  # None (default): single val split
 
     X, y = load_dataset(dataset_path)
 
@@ -105,15 +106,33 @@ def run(config_path: str) -> Path:
 
         # --- Fuzzy-OPF ---
         if tuning_cfg["method"] == "ga":
-            result = genetic_search(
-                X_train, y_train, X_val, y_val,
-                k_max_bounds=tuple(tuning_cfg.get("k_max_bounds", (1, 150))),
-                n_agents=tuning_cfg.get("n_agents", 15),
-                n_iterations=tuning_cfg.get("n_iterations", 30),
-                search_best_k=search_best_k,
-                membership_side=membership_side,
-                seed=seed,
-            )
+            if cv_folds is not None:
+                # Pool train+val together for k-fold CV (see BACKLOG.md:
+                # a single small validation split can be too granular to
+                # discriminate sigma values -- k-fold uses every pooled
+                # sample as validation exactly once, for a steadier signal).
+                X_pool = np.vstack([X_train, X_val])
+                y_pool = np.concatenate([y_train, y_val])
+                result = genetic_search(
+                    X_pool, y_pool, None, None,
+                    k_max_bounds=tuple(tuning_cfg.get("k_max_bounds", (1, 150))),
+                    n_agents=tuning_cfg.get("n_agents", 15),
+                    n_iterations=tuning_cfg.get("n_iterations", 30),
+                    search_best_k=search_best_k,
+                    membership_side=membership_side,
+                    seed=seed,
+                    cv_folds=cv_folds,
+                )
+            else:
+                result = genetic_search(
+                    X_train, y_train, X_val, y_val,
+                    k_max_bounds=tuple(tuning_cfg.get("k_max_bounds", (1, 150))),
+                    n_agents=tuning_cfg.get("n_agents", 15),
+                    n_iterations=tuning_cfg.get("n_iterations", 30),
+                    search_best_k=search_best_k,
+                    membership_side=membership_side,
+                    seed=seed,
+                )
             k_max, sigma, val_acc = result.k_max, result.sigma, result.accuracy
         else:
             k_max, sigma = tuning_cfg["k_max"], tuning_cfg["sigma"]

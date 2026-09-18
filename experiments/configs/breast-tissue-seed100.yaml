@@ -1,0 +1,15 @@
+dataset: data/raw/breast-tissue.txt
+n_runs: 20
+seed: 100
+search_best_k: false
+membership_side: target
+
+# seed=100 (cobre seeds 100-119 internamente) -- totalmente independente
+# dos dois runs anteriores (seed=0 cobre 0-19, seed=1 cobre 1-20: se
+# sobrepoem em 19 das 20 seeds!). Terceira opinião de verdade, sem
+# overlap, antes de concluir se o -0.005 e ruido ou efeito real.
+tuning:
+  method: ga
+  k_max_bounds: [1, 40]
+  n_agents: 15
+  n_iterations: 30

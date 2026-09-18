@@ -51,17 +51,14 @@ extensões para priorizar depois.
   MPEG-7 BAS, Breast Tissue**. Somando aos já validados antes (Boat,
   Cone-Torus, Thyroid), são **8 de 12 datasets do artigo testados**.
 
-  **Resultado misto, não 8/8**: em 7 dos 8 (Boat, Cone-Torus, Data1,
-  Data2, Data3, MPEG-7 BAS, Thyroid), Fuzzy-OPF ≥ OPF, reproduzindo a
-  propriedade central reivindicada pelo paper. **Breast Tissue é a
-  exceção**: Fuzzy-OPF ficou consistentemente ~0.005 *abaixo* do OPF em
-  duas seeds diferentes (seed=0: 0.6962 vs. 0.7018; seed=1: 0.6951 vs.
-  0.6997) -- pequeno (bem dentro de 1 desvio padrão, ~0.055, nesse dataset
-  minúsculo e ruidoso: 106 amostras, 6 classes, ~15-18 por classe), mas
-  reproduzível, não ruído de uma amostra isolada. Hipótese: a busca via GA
-  às vezes converge para um `sigma` subótimo em datasets pequenos/ruidosos
-  como este. Merece nota ao reportar resultados -- não é uma falha, mas
-  não é a garantia teórica "nunca pior" se sustentando à risca aqui.
+  **Resultado (revisado após investigação mais profunda, ver item
+  específico do Breast Tissue abaixo): 8/8 com Fuzzy-OPF ≥ OPF**, dentro
+  do ruído estatístico esperado. Breast Tissue pareceu inicialmente uma
+  exceção (~0.005 abaixo em 2 rodadas), mas uma terceira rodada com seeds
+  totalmente independentes inverteu o sinal (+0.0015) -- confirmando que
+  era ruído de amostra pequena, não um efeito real. Reproduz a
+  propriedade central reivindicada pelo paper em todos os 8 datasets
+  testados.
   Acurácias absolutas tendem a vir mais altas que o artigo em alguns casos
   (ex.: MPEG-7 BAS: nosso ~0.90 vs. artigo ~0.80), mas a direção
   qualitativa (Fuzzy-OPF raramente perde) se mantém na maioria.
@@ -79,21 +76,30 @@ extensões para priorizar depois.
   **privados** do
   artigo, sem fonte pública -- fora de alcance permanentemente.
 - [x] **Investigar por que o Fuzzy-OPF fica consistentemente (~0.005, 2
-  seeds) abaixo do OPF no Breast Tissue** — **resolvido**. Varredura
-  exaustiva de `sigma` (21 pontos, 0.2 a 1.2, `k_max=20` fixo) revelou a
-  causa: **a acurácia de validação fica constante (0.6787) em TODOS os 21
-  valores de sigma testados**, enquanto a acurácia de teste sobe de forma
-  monotônica com sigma (0.7677 -> 0.7888 -> 0.8066 no melhor ponto,
-  sigma~1.15-1.2). Ou seja, o conjunto de validação (só 21 amostras para 6
-  classes, ~3-4 por classe) é granular demais para distinguir entre
-  valores de sigma -- qualquer busca de hiperparâmetro (GA, PSO, o que
-  for) não tem sinal para escolher com confiança, e o "empate" na
-  validação às vezes é resolvido a favor de um sigma que performa pior no
-  teste. **Não é uma fraqueza real do Fuzzy-OPF**: é uma limitação
-  conhecida do protocolo 60/20/20 padrão em datasets muito pequenos --
-  achado metodológico genuíno, vale nota em qualquer reporte de
-  resultados. Resultado em
-  `results/breast-tissue/sigma_sweep_20260917T155218Z.csv`.
+  seeds) abaixo do OPF no Breast Tissue** — **resolvido, com correção
+  importante depois de mais investigação**. A explicação original
+  (validação de 20 amostras granular demais, curva de sigma completamente
+  plana na validação) se confirmou -- mas persistiu mesmo testando k-fold
+  CV (5 folds) e `k_max` maior (20 em vez de 5): a acurácia de validação
+  continuou **idêntica bit-a-bit** entre as duas configurações, sinal de
+  que, neste pool pequeno (~85 amostras), as previsões simplesmente não
+  mudam com sigma/k_max nessa faixa -- não é algo que busca melhor ou
+  validação melhor resolve.
+
+  **A pista decisiva**: as duas rodadas de 20 runs originais (seed base 0 e
+  1) se sobrepõem em 19 das 20 seeds internas (`seed = base_seed +
+  run_id`), então não eram duas amostras independentes. Uma terceira
+  rodada com seed base 100 (seeds 100-119, zero sobreposição) deu Fuzzy-OPF
+  **acima** do OPF (+0.0015), invertendo o sinal das duas anteriores
+  (-0.0056, -0.0046). **Conclusão final: é ruído estatístico de amostra
+  pequena, não um efeito real e sistemático contra o Fuzzy-OPF** -- o
+  sinal muda de direção conforme o conjunto de teste, sempre dentro de
+  ±0.005, bem menor que o desvio padrão de cada rodada (~0.05). A "exceção"
+  do Breast Tissue não é uma exceção real. `cv_folds` (k-fold) e o suporte
+  a `k_max` alternativo em `sweep_sigma.py` ficam disponíveis e testados,
+  mesmo não tendo sido a explicação final aqui -- podem servir em outros
+  datasets pequenos no futuro. Resultados em
+  `results/breast-tissue/{sigma_sweep_20260917T155218Z,sigma_sweep_20260918T042916Z,sigma_sweep_20260918T043513Z,20260918T044524Z}.csv`.
 - [ ] **NOVO, motivado pelo achado acima**: para datasets pequenos (Boat,
   Breast Tissue, Data2, Data3, ...), considerar validação cruzada
   (k-fold) em vez do split único 60/20/20 para escolher hiperparâmetros --

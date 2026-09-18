@@ -29,7 +29,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from fuzzy_opf import FuzzyOPF, load_dataset, stratified_split
-from fuzzy_opf.datasets import standardize
+from fuzzy_opf.datasets import standardize, stratified_kfold_indices
 
 from opfython.math.general import opf_accuracy
 from opfython.models.unsupervised import UnsupervisedOPF
@@ -49,6 +49,7 @@ def run(config_path: str) -> Path:
     membership_side = config.get("membership_side", "target")
     normalize = config.get("normalize", False)
     stratified = config.get("stratified", False)
+    cv_folds = config.get("cv_folds")  # None (default): single val split, as before
 
     sigma_start, sigma_end, sigma_step = config.get("sigma_range", [0.2, 1.2, 0.1])
     sigmas = list(np.round(np.arange(sigma_start, sigma_end + 1e-9, sigma_step), 4))
@@ -61,27 +62,53 @@ def run(config_path: str) -> Path:
     if normalize:
         X_train, X_val, X_test = standardize(X_train, X_val, X_test)
 
-    print(f"n_train={X_train.shape[0]} n_val={X_val.shape[0]} n_test={X_test.shape[0]}, "
-          f"k_max={k_max} (fixed), {len(sigmas)} sigma values: {sigmas}")
+    if cv_folds is not None:
+        # Pool train+val for k-fold CV; test stays held out, evaluated once
+        # per sigma using a model fit on the FULL pool (matches what
+        # genetic_search's cv_folds mode does in practice).
+        X_pool = np.vstack([X_train, X_val])
+        y_pool = np.concatenate([y_train, y_val])
+        print(f"n_pool={X_pool.shape[0]} (cv_folds={cv_folds}) n_test={X_test.shape[0]}, "
+              f"k_max={k_max} (fixed), {len(sigmas)} sigma values: {sigmas}")
+    else:
+        print(f"n_train={X_train.shape[0]} n_val={X_val.shape[0]} n_test={X_test.shape[0]}, "
+              f"k_max={k_max} (fixed), {len(sigmas)} sigma values: {sigmas}")
 
-    # Clustering depends only on k_max -- compute once, reuse for every
-    # sigma value below (this is what makes the sweep cheap).
+    # Clustering depends only on k_max -- compute once (on the full
+    # train/pool set), reuse for every sigma value below for the
+    # single-fit-per-sigma cases; the CV path retrains per fold instead
+    # (each fold's subset differs, so a single cached clustering wouldn't
+    # be valid for all of them -- same tradeoff as _make_cv_fitness).
     t0 = time.time()
     min_k = 1 if search_best_k else k_max
+    fit_pool_X, fit_pool_y = (X_pool, y_pool) if cv_folds is not None else (X_train, y_train)
     cluster_model = UnsupervisedOPF(min_k=min_k, max_k=k_max, distance="log_squared_euclidean")
-    cluster_model.fit(X_train, y_train)
+    cluster_model.fit(fit_pool_X, fit_pool_y)
     print(f"Clustering (k_max={k_max}) done once in {time.time() - t0:.1f}s, reused below.\n")
 
     rows = []
     for sigma in sigmas:
         t0 = time.time()
-        model = FuzzyOPF(k_max=k_max, sigma=sigma, search_best_k=search_best_k, membership_side=membership_side)
-        model.fit(X_train, y_train, precomputed_cluster_model=cluster_model)
 
-        val_acc = opf_accuracy(y_val, model.predict(X_val))
-        test_acc = opf_accuracy(y_test, model.predict(X_test))
+        if cv_folds is not None:
+            fold_accs = []
+            for train_idx, val_idx in stratified_kfold_indices(y_pool, cv_folds, random_state=seed):
+                fold_model = FuzzyOPF(k_max=k_max, sigma=sigma, search_best_k=search_best_k, membership_side=membership_side)
+                fold_model.fit(X_pool[train_idx], y_pool[train_idx])
+                fold_accs.append(opf_accuracy(y_pool[val_idx], fold_model.predict(X_pool[val_idx])))
+            val_acc = float(np.mean(fold_accs))
+
+            # Test accuracy: fit once on the full pool for this sigma.
+            test_model = FuzzyOPF(k_max=k_max, sigma=sigma, search_best_k=search_best_k, membership_side=membership_side)
+            test_model.fit(X_pool, y_pool, precomputed_cluster_model=cluster_model)
+            test_acc = opf_accuracy(y_test, test_model.predict(X_test))
+        else:
+            model = FuzzyOPF(k_max=k_max, sigma=sigma, search_best_k=search_best_k, membership_side=membership_side)
+            model.fit(X_train, y_train, precomputed_cluster_model=cluster_model)
+            val_acc = opf_accuracy(y_val, model.predict(X_val))
+            test_acc = opf_accuracy(y_test, model.predict(X_test))
+
         elapsed = time.time() - t0
-
         print(f"sigma={sigma:.2f}: val_acc={val_acc:.4f} test_acc={test_acc:.4f} ({elapsed:.1f}s)")
         rows.append([sigma, f"{val_acc:.4f}", f"{test_acc:.4f}", f"{elapsed:.1f}"])
 

@@ -1,0 +1,7 @@
+dataset: data/raw/breast-tissue.txt
+seed: 0
+k_max: 20
+search_best_k: false
+membership_side: target
+sigma_range: [0.2, 1.2, 0.05]
+cv_folds: 5

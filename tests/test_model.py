@@ -259,3 +259,22 @@ def test_smote_oversample():
     assert exact_dup_count == X.shape[0], (
         f"expected exactly {X.shape[0]} exact matches (the originals), got {exact_dup_count}"
     )
+
+
+def test_stratified_kfold_indices():
+    from fuzzy_opf.datasets import stratified_kfold_indices
+
+    rng = np.random.default_rng(0)
+    n = 106
+    y = rng.choice([0, 1, 2], size=n, p=[0.2, 0.3, 0.5])
+
+    folds = list(stratified_kfold_indices(y, n_splits=5, random_state=0))
+    assert len(folds) == 5
+
+    all_val = []
+    for train_idx, val_idx in folds:
+        assert len(set(train_idx.tolist()) & set(val_idx.tolist())) == 0
+        all_val.extend(val_idx.tolist())
+
+    # Every sample used as validation exactly once across all folds.
+    assert sorted(all_val) == list(range(n))

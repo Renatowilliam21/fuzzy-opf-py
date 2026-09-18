@@ -296,3 +296,44 @@ def apply_balance(
     if method == "smote":
         return smote_oversample(X_train, y_train, k_neighbors=k_neighbors, random_state=random_state, strategy=strategy)
     return oversample_minority_classes(X_train, y_train, random_state=random_state, strategy=strategy)
+
+
+def stratified_kfold_indices(y: np.ndarray, n_splits: int, random_state: int | None = None):
+    """Yields (train_idx, val_idx) for each of n_splits stratified folds.
+
+    Each class's samples are shuffled and split into n_splits nearly-equal
+    chunks independently, so every fold's validation slice keeps roughly
+    the same class proportions as the full dataset -- same rationale as
+    stratified_split, extended to k folds instead of one 60/40 split.
+
+    Motivated by the Breast Tissue finding: a single ~20-sample validation
+    split was too granular to distinguish between sigma values (accuracy
+    was flat across the entire [0.2, 1.2] range). k-fold CV uses every
+    sample as validation data exactly once, giving a more stable signal
+    for hyperparameter selection on small datasets, at the cost of k
+    trainings instead of 1 per candidate (k_max, sigma) evaluated.
+
+    Args:
+        y: Labels (used only to determine class membership; X is indexed
+            by the caller using the same indices).
+        n_splits: Number of folds (k).
+        random_state: Seed for reproducibility.
+
+    Yields:
+        (train_idx, val_idx) index arrays, n_splits times.
+    """
+    rng = np.random.default_rng(random_state)
+
+    fold_assignment = np.empty(len(y), dtype=int)
+    for label in np.unique(y):
+        class_idx = np.flatnonzero(y == label)
+        rng.shuffle(class_idx)
+        # np.array_split handles counts not evenly divisible by n_splits.
+        for fold, chunk in enumerate(np.array_split(class_idx, n_splits)):
+            fold_assignment[chunk] = fold
+
+    all_idx = np.arange(len(y))
+    for fold in range(n_splits):
+        val_idx = all_idx[fold_assignment == fold]
+        train_idx = all_idx[fold_assignment != fold]
+        yield train_idx, val_idx
