@@ -143,10 +143,22 @@ extensões para priorizar depois.
 
 ## Performance
 
-- [ ] **Paralelismo** — maior limitação herdada do C (o próprio artigo cita
-  isso como trabalho futuro nunca feito). O treino supervisionado é O(n²)
-  sequencial; candidatos: paralelizar a avaliação de agentes do GA/PSO via
-  `joblib`, ou paralelizar o cálculo de distâncias par-a-par.
+- [x] **Paralelismo** — **parcialmente resolvido**. `run_hyperparam_search.py`
+  agora roda GA, PSO e Random **em processos separados e concorrentes**
+  (`ProcessPoolExecutor`, `parallel: true` por padrão) em vez de sequência
+  -- as três buscas são independentes, então isso é paralelizável sem
+  tocar no algoritmo de cada método. **Achado importante ao medir**: no
+  Cone-Torus (rápido), o modo paralelo saiu **mais lento** que o
+  sequencial (10,1s vs. 9,1s) -- cada processo paga um custo fixo de
+  inicialização (reimportar numpy/opfython, aquecimento JIT do Numba) que
+  não compensa quando a busca real leva só segundos. Só vale a pena em
+  datasets caros (Thyroid), onde minutos de computação real ofuscam esse
+  overhead -- documentado no código, `parallel: false` disponível pra
+  desativar em datasets pequenos. **Ainda não feito**: paralelizar dentro
+  de uma única busca (avaliação de agentes de UMA geração do GA/PSO em
+  paralelo) e paralelizar o cálculo de distâncias par-a-par dentro do
+  treino do Fuzzy-OPF em si -- o gargalo O(n²) sequencial mencionado pelo
+  artigo continua lá dentro de cada método individual.
 - [x] **Compartilhar cache de clustering entre métodos** em
   `run_hyperparam_search.py` — hoje GA, PSO e Random cada um recalcula o
   clustering uma vez (redundante quando `k_max` é fixo entre os três).
@@ -155,9 +167,27 @@ extensões para priorizar depois.
 
 ## Novas funcionalidades / comparações
 
-- [ ] **Otimização Bayesiana via Optuna** — candidato mais forte pra
-  "modelo baseado em distribuição" desde que o CEM quebrou; nunca
-  implementado (`bayesian_search`).
+- [x] **Otimização Bayesiana via Optuna** — **implementado e testado**.
+  `bayesian_search()` (TPE via Optuna, dependência nova adicionada ao
+  `pyproject.toml`) segue a mesma interface de `genetic_search`/
+  `pso_search`/`random_search`, incluindo suporte a `cv_folds` e
+  `cluster_cache`. Diferente do GA/PSO, `n_evaluations` bate **exatamente**
+  com `n_trials` (sem a inflação populacional que atrapalhou comparações
+  anteriores) -- comparação de orçamento direta, sem distinção
+  nominal/real. Integrado como 4º método em `run_hyperparam_search.py`
+  (`ga`, `pso`, `random`, `bayesian`, todos rodando em paralelo). Testado
+  no Cone-Torus: achou a mesma região boa de sigma que os outros três.
+
+  **Teste no Thyroid com orçamento=40**: os 4 métodos convergiram pro
+  mesmo resultado (val_acc=0.7559, sigma~1.11-1.16). O Bayesiano fez
+  exatamente 40 avaliações (igual ao Random) e não demonstrou vantagem de
+  eficiência amostral **com esse orçamento** -- consistente com o padrão
+  já visto nessa investigação: quando o orçamento é grande o bastante pra
+  achar o platô largo de sigma, qualquer método competente converge, e a
+  comparação não discrimina. **Próximo passo**: repetir com orçamento bem
+  menor (8-10 avaliações) -- é exatamente nesse regime "poucas avaliações,
+  cada uma cara" que a eficiência amostral do Bayesiano deveria se
+  destacar do Random, se a vantagem teórica for real aqui.
 - [ ] **Otimização multiobjetivo (NSGA-II/III)** — Pareto front
   acurácia-vs-custo computacional, usando `opytimizer.optimizers.multi_objective`.
   Conceitualmente separado da comparação single-objective atual.
