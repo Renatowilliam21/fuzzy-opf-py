@@ -64,17 +64,13 @@ extensões para priorizar depois.
   qualitativa (Fuzzy-OPF raramente perde) se mantém na maioria.
   Resultados em `results/{data1,data2,data3,mpeg7_BAS,breast-tissue}/*.csv`.
 
-  **Ainda faltam**: Four-Class (fonte: LIBSVM binary datasets, não a
-  LibOPF -- ainda não conseguido; o zip baixado veio com o Landsat por
-  engano), Landsat Satellite (convertido mas o usuário optou por não rodar
-  por ora -- **nota**: o artigo diz 5.100 amostras/8 classes, mas o
-  dataset público padrão do UCI tem 6.435 amostras/6-7 classes -- mesma
-  discrepância observada no Thyroid, então não vai bater o número exato
-  do artigo mesmo se rodado). Breast Tissue também teve uma discrepância
-  menor: artigo diz 10 atributos, arquivo real tem 9. **Inatingíveis**:
-  Electric Industrial Profiles e Electric Commercial Profiles são dados
-  **privados** do
-  artigo, sem fonte pública -- fora de alcance permanentemente.
+  **Decisão do usuário: não rodar Four-Class e Landsat Satellite** (ficam
+  fora do escopo definitivamente, não só "pendentes"). Breast Tissue teve
+  uma discrepância menor: artigo diz 10 atributos, arquivo real tem 9.
+  **Inatingíveis**: Electric Industrial Profiles e Electric Commercial
+  Profiles são dados **privados** do artigo, sem fonte pública -- fora de
+  alcance permanentemente. Ao todo, 8 de 12 datasets do artigo são
+  considerados cobertos para os fins deste projeto.
 - [x] **Investigar por que o Fuzzy-OPF fica consistentemente (~0.005, 2
   seeds) abaixo do OPF no Breast Tissue** — **resolvido, com correção
   importante depois de mais investigação**. A explicação original
@@ -184,13 +180,43 @@ extensões para priorizar depois.
   eficiência amostral **com esse orçamento** -- consistente com o padrão
   já visto nessa investigação: quando o orçamento é grande o bastante pra
   achar o platô largo de sigma, qualquer método competente converge, e a
-  comparação não discrimina. **Próximo passo**: repetir com orçamento bem
-  menor (8-10 avaliações) -- é exatamente nesse regime "poucas avaliações,
-  cada uma cara" que a eficiência amostral do Bayesiano deveria se
-  destacar do Random, se a vantagem teórica for real aqui.
-- [ ] **Otimização multiobjetivo (NSGA-II/III)** — Pareto front
-  acurácia-vs-custo computacional, usando `opytimizer.optimizers.multi_objective`.
-  Conceitualmente separado da comparação single-objective atual.
+  comparação não discrimina.
+
+  **Teste com orçamento pequeno (9 avaliações)**: resultado limpo e
+  conclusivo. GA (18 avaliações reais) e PSO (12) ficaram presos no mesmo
+  vale de ótimo local (sigma~0.92, val_acc=0.7376) já identificado antes,
+  enquanto Random e Bayesiano (9 avaliações cada, batendo exatamente com
+  o orçamento) acharam o platô bom (sigma~1.11-1.16, val_acc=0.7559) --
+  **mesmo com MENOS avaliações que GA/PSO**. Confirma: em orçamentos
+  pequenos, métodos populacionais (GA/PSO, com população forçosamente
+  pequena pelo orçamento) são mais suscetíveis a ótimos locais do que
+  métodos baseados em modelo (Bayesiano) ou até busca aleatória sem
+  nenhuma inteligência -- mais avaliações não ajudam o GA/PSO aqui porque
+  o problema é falta de diversidade populacional, não falta de tentativas.
+  **Contribuição publicável**: para o Fuzzy-OPF no Thyroid, GA/PSO com
+  orçamento pequeno arriscam convergência prematura; Bayesiano (ou até
+  Random) são escolhas mais seguras nesse regime.
+- [x] **Otimização multiobjetivo (NSGA-II)** — **implementado e testado**.
+  `nsga2_search()` retorna o front de Pareto completo (não um único
+  "melhor"), com dois objetivos: erro de validação e `k_max` (proxy
+  determinístico de custo computacional -- tempo de relógio foi
+  descartado como objetivo por ser ruidoso, 2-3x de variação run-a-run
+  medida nesta própria investigação). Ambos objetivos avaliados a partir
+  de um único treino por agente (memoizado por posição exata, evitando
+  treinar 2x). Testado no Cone-Torus: o front colapsou inteiro em
+  `k_max=2` -- resultado correto, não bug: nesse dataset fácil, `k_max`
+  maior nunca dá acurácia melhor, então não existe trade-off real e o
+  NSGA-II descobriu isso sozinho. 18 testes passando, incluindo
+  verificação formal de que nenhum ponto do front é dominado por outro.
+
+  **Teste no Thyroid (`k_max_bounds` largo, 1-100)**: front com apenas 3
+  pontos distintos (k_max=1, 2, 8), cobrindo val_acc de 0.7494 a 0.7562
+  (diferença de só 0.0068) -- confirma que **no Thyroid, k_max importa
+  muito pouco pra acurácia**, diferente de sigma (que já sabíamos ser
+  crítico, ver achado da multimodalidade). Recomendação prática direta:
+  usar k_max pequeno (1-8) no Thyroid sem perda de acurácia, ganhando
+  velocidade real (clustering escala com k_max). Resultado em
+  `results/thyroid/pareto_20260918T201804Z.csv`.
 - [ ] **CEM**: revisitar quando a `opytimizer` corrigir o bug de
   compatibilidade com NumPy 2.x (`cem_search` já existe, documentado como
   quebrado).
@@ -212,6 +238,48 @@ extensões para priorizar depois.
 - [ ] **Propor PR para a própria `opfython`** — o Fuzzy-OPF preencheria uma
   lacuna real na lib (que só tem Supervised/Unsupervised/KNN/Semi-Supervised
   OPF).
+
+## Trabalhos relacionados (pesquisa de literatura, 2026-09-18)
+
+- [x] **Levantamento inicial feito**. Achados principais:
+  - **"Handling Imbalanced Datasets Through Optimum-Path Forest"** (Passos,
+    Jodas, Ribeiro, de Souza, Papa -- mesmo grupo do Fuzzy-OPF original)
+    já propôs técnicas de balanceamento **nativas do OPF**: O²PF
+    (oversampling via clustering + distribuição Gaussiana por cluster) e
+    OPF-US (undersampling via pontuação de importância no processo de
+    competição). Resultado deles: **OPF-US (undersampling nativo)
+    geralmente supera SMOTE genérico** no OPF padrão. Isso não invalida
+    nosso achado (SMOTE > duplicação simples no Fuzzy-OPF, com explicação
+    mecanística de topologia de grafo), mas expõe uma comparação que
+    falta: **testar OPF-US contra SMOTE no nosso Fuzzy-OPF**, já que o
+    grupo original sugere que undersampling nativo pode ser ainda melhor.
+  - Encontrada aplicação prática do Fuzzy-OPF (IoT security monitoring,
+    hit rate 98-99%) e um precedente do próprio grupo (Probabilistic OPF)
+    usando metaheurísticas (Bat, Firefly, PSO, Nelder-Mead) para tuning de
+    hiperparâmetros -- confirma que a prática é estabelecida no grupo,
+    mas nenhum trabalho encontrado faz a comparação GA/PSO/Bayesiano/
+    Random com contagem real de avaliações, nem caracteriza
+    multimodalidade do espaço de busca, nem usa NSGA-II para o trade-off
+    k_max-vs-acurácia no contexto do (Fuzzy-)OPF -- essas parecem
+    contribuições originais deste projeto.
+- [x] **Implementar OPF-US e comparar contra SMOTE no Thyroid** —
+  **resolvido**. `opf_us_undersample()` (generalização multiclasse da
+  técnica de Passos et al. 2022) testada lado a lado com SMOTE.
+  Resultado: **os dois melhoram sobre o baseline por margem parecida**
+  (SMOTE +0.0516, OPF-US +0.0473 -- dentro do que seria empate sem teste
+  estatístico formal), mas com **padrões de erro opostos**. SMOTE
+  (34%->51% recall na minoritária, 97%->95% na majoritária) preserva mais
+  a classe majoritária; OPF-US (34%->68% na minoritária, mas 97%->73% na
+  majoritária) prioriza recall equilibrado à custa de descartar 97% da
+  classe majoritária (4004->103 amostras). **Não há vencedor absoluto** --
+  depende se o caso de uso prioriza recall equilibrado (OPF-US) ou
+  preservar a classe majoritária com menor perda de dados (SMOTE). Essa
+  caracterização do trade-off é a resposta direta à pergunta de revisor
+  identificada na pesquisa de trabalhos relacionados.
+- [ ] Levantamento mais aprofundado (busca sistemática, não só
+  exploratória) antes de submeter -- confirmar que não há outro trabalho
+  cobrindo exatamente a combinação (Fuzzy-OPF + comparação de
+  metaheurísticas + NSGA-II) antes de reivindicar ineditismo no artigo.
 
 ## Itens menores
 
