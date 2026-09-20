@@ -220,9 +220,34 @@ extensões para priorizar depois.
 - [ ] **CEM**: revisitar quando a `opytimizer` corrigir o bug de
   compatibilidade com NumPy 2.x (`cem_search` já existe, documentado como
   quebrado).
-- [ ] **Funções de pertinência alternativas** (gaussiana, sigmoide,
-  exponencial) — a Eq. 5 do artigo usa uma forma quadrática fixa; comparar
-  com outras formas é uma extensão natural.
+- [x] **Funções de pertinência alternativas** — **implementado, testado e
+  investigado até conclusão definitiva**. `membership_kind` (linear,
+  quadratic [Eq. 5 original], cubic, sigmoid) em `FuzzyOPF`, todas
+  satisfazendo as mesmas condições de contorno (`F(rho_min)=sigma`,
+  `F(rho_max)=1)` que a original -- só a forma da curva entre os dois
+  pontos muda, garantindo comparação justa (confirmado por teste formal).
+
+  **Teste 1 (hiperparâmetro fixo, sigma=0.6 para todas, Thyroid)**:
+  quadratic=0.7416 melhor, sigmoid=0.7299 pior -- diferença de 0.0117.
+
+  **Teste 2 (busca via GA própria pra cada forma, n_agents=15,
+  n_iterations=5, 2 seeds, Thyroid)**: **as 4 formas convergiram pro mesmo
+  resultado** -- todas acharam `sigma` na região 1.08-1.2 e deram
+  acurácia de teste entre 0.7502 e 0.7551 (praticamente indistinguível).
+
+  **Conclusão final**: a diferença do Teste 1 era um artefato de usar
+  `sigma=0.6` fixo para todas -- bom para a quadrática, ruim para a
+  sigmoide, não uma diferença real de capacidade entre as formas. **Com
+  busca de hiperparâmetro adequada, a forma da curva de pertinência
+  importa pouco** -- o que importa é achar o `sigma` certo. Achado
+  publicável: reforça a importância de busca robusta de hiperparâmetro
+  antes de comparar variações estruturais do método (mesmo tema do
+  achado de multimodalidade do Thyroid). NOTA: por uma falha do script na
+  época (corrigida -- CSVs agora incluem `membership_side`/
+  `membership_kind` como colunas, e o nome do arquivo é sufixado com a
+  forma), não foi possível identificar com certeza qual dos 4 CSVs
+  originais corresponde a qual forma -- mas como o resultado é um empate
+  entre as 4, isso não compromete a conclusão.
 - [x] **Comparação sistemática de métricas de distância** (manhattan,
   chi_squared, bray_curtis, etc.) além da `log_squared_euclidean` padrão.
   **Resolvido**: `experiments/compare_distances.py` implementado e

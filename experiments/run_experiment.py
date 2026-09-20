@@ -44,6 +44,7 @@ def run(config_path: str) -> Path:
     tuning_cfg = config.get("tuning", {"method": "fixed", "k_max": 10, "sigma": 0.6})
     search_best_k = config.get("search_best_k", True)
     membership_side = config.get("membership_side", "target")
+    membership_kind = config.get("membership_kind", "quadratic")
     base_seed = config.get("seed", 0)
     prune_cfg = config.get("prune")  # None (default) disables pruning entirely
     normalize = config.get("normalize", False)
@@ -102,7 +103,7 @@ def run(config_path: str) -> Path:
         opf.fit(X_train, y_train)
         opf_time = time.time() - t0
         opf_acc = opf_accuracy(y_test, opf.predict(X_test))
-        rows.append([run_id, "opf", "-", "-", "-", opf_acc, opf_time])
+        rows.append([run_id, "opf", "-", "-", "-", opf_acc, opf_time, "-", "-"])
 
         # --- Fuzzy-OPF ---
         if tuning_cfg["method"] == "ga":
@@ -120,6 +121,7 @@ def run(config_path: str) -> Path:
                     n_iterations=tuning_cfg.get("n_iterations", 30),
                     search_best_k=search_best_k,
                     membership_side=membership_side,
+                    membership_kind=membership_kind,
                     seed=seed,
                     cv_folds=cv_folds,
                 )
@@ -131,6 +133,7 @@ def run(config_path: str) -> Path:
                     n_iterations=tuning_cfg.get("n_iterations", 30),
                     search_best_k=search_best_k,
                     membership_side=membership_side,
+                    membership_kind=membership_kind,
                     seed=seed,
                 )
             k_max, sigma, val_acc = result.k_max, result.sigma, result.accuracy
@@ -139,11 +142,18 @@ def run(config_path: str) -> Path:
             val_acc = "-"
 
         t0 = time.time()
-        fuzzy = FuzzyOPF(k_max=k_max, sigma=sigma, search_best_k=search_best_k, membership_side=membership_side)
+        # membership_kind is now respected by the GA search above too (not
+        # just this final fit), so k_max/sigma were optimized for whichever
+        # shape this config uses -- a fair comparison across shapes.
+        fuzzy = FuzzyOPF(
+            k_max=k_max, sigma=sigma, search_best_k=search_best_k,
+            membership_side=membership_side, membership_kind=membership_kind,
+        )
         fuzzy.fit(X_train, y_train)
         fuzzy_time = time.time() - t0
         fuzzy_acc = opf_accuracy(y_test, fuzzy.predict(X_test))
-        rows.append([run_id, "fuzzy-opf", k_max, f"{sigma:.3f}", val_acc, fuzzy_acc, fuzzy_time])
+        rows.append([run_id, "fuzzy-opf", k_max, f"{sigma:.3f}", val_acc, fuzzy_acc, fuzzy_time,
+                     membership_side, membership_kind])
 
         print(f"[{dataset_name}] run {run_id + 1}/{n_runs}: "
               f"OPF={opf_acc:.4f}  Fuzzy-OPF={fuzzy_acc:.4f}  (k={k_max}, sigma={sigma})")
@@ -151,9 +161,12 @@ def run(config_path: str) -> Path:
     out_dir = REPO_ROOT / "results" / dataset_name
     out_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_path = out_dir / f"{timestamp}.csv"
+    # Always label the kind in the filename (not just inside the CSV) --
+    # after nearly losing track of which of 4 sequential runs was which
+    # membership_kind, ambiguity here isn't worth risking again.
+    out_path = out_dir / f"{timestamp}_{membership_kind}.csv"
 
-    header = "run,method,k_max,sigma,val_accuracy,test_accuracy,fit_seconds\n"
+    header = "run,method,k_max,sigma,val_accuracy,test_accuracy,fit_seconds,membership_side,membership_kind\n"
     with open(out_path, "w") as f:
         f.write(header)
         for row in rows:

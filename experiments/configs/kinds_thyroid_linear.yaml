@@ -1,0 +1,18 @@
+dataset: data/raw/thyroid.txt
+n_runs: 2
+seed: 0
+search_best_k: false
+membership_side: target
+membership_kind: linear
+normalize: true
+
+# Orcamento maior de proposito: n_agents=15 da diversidade populacional
+# suficiente pra nao ficar presa no primeiro candidato de sorte (o que
+# aconteceu com n_agents=3 antes), n_iterations=5 da geracoes reais de
+# evolucao. k_max fixo em 20 (ja confirmado, via NSGA-II, que k_max
+# importa pouco no Thyroid).
+tuning:
+  method: ga
+  k_max_bounds: [20, 20]
+  n_agents: 15
+  n_iterations: 5
