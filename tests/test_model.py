@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 from sklearn.datasets import make_classification
 
+from pathlib import Path
+
 from fuzzy_opf import FuzzyOPF, genetic_search
 
 
@@ -278,3 +280,179 @@ def test_stratified_kfold_indices():
 
     # Every sample used as validation exactly once across all folds.
     assert sorted(all_val) == list(range(n))
+
+
+def test_bayesian_search_returns_valid_result(toy_dataset):
+    from fuzzy_opf import bayesian_search
+
+    X, y = toy_dataset
+    X_train, y_train = X[:60], y[:60]
+    X_val, y_val = X[60:90], y[60:90]
+
+    result = bayesian_search(
+        X_train, y_train, X_val, y_val,
+        k_max_bounds=(1, 10), n_trials=5, seed=0,
+    )
+
+    assert 1 <= result.k_max <= 10
+    assert 0.2 <= result.sigma <= 1.2
+    assert 0.0 <= result.accuracy <= 1.0
+    assert result.n_evaluations == 5  # exact, unlike GA/PSO's inflation
+
+
+def test_nsga2_search_returns_pareto_front(toy_dataset):
+    from fuzzy_opf import nsga2_search
+
+    X, y = toy_dataset
+    X_train, y_train = X[:60], y[:60]
+    X_val, y_val = X[60:90], y[60:90]
+
+    result = nsga2_search(
+        X_train, y_train, X_val, y_val,
+        k_max_bounds=(1, 10), n_agents=6, n_iterations=3, search_best_k=False, seed=0,
+    )
+
+    assert len(result.points) >= 1
+    for k_max, sigma, acc in result.points:
+        assert 1 <= k_max <= 10
+        assert 0.2 <= sigma <= 1.2
+        assert 0.0 <= acc <= 1.0
+
+    # Points must be sorted by k_max ascending (as documented).
+    k_maxes = [p[0] for p in result.points]
+    assert k_maxes == sorted(k_maxes)
+
+    # No point should be dominated by another (Pareto-front property): for
+    # any two points, it must NOT be that one has both <= k_max AND >= acc
+    # than the other (with at least one strict).
+    for i, (k1, _, a1) in enumerate(result.points):
+        for j, (k2, _, a2) in enumerate(result.points):
+            if i == j:
+                continue
+            dominates = (k2 <= k1 and a2 >= a1) and (k2 < k1 or a2 > a1)
+            assert not dominates, f"point {i} is dominated by point {j}"
+
+
+def test_opf_us_undersample():
+    from fuzzy_opf.datasets import opf_us_undersample
+
+    rng = np.random.default_rng(0)
+    n = 200
+    y = rng.choice([0, 1, 2], size=n, p=[0.15, 0.25, 0.6])
+    X = rng.random((n, 5))
+    X_train, y_train = X[:140], y[:140]
+    X_val, y_val = X[140:], y[140:]
+
+    X_us, y_us = opf_us_undersample(X_train, y_train, X_val, y_val, k_max=10, sigma=0.6)
+
+    counts = np.bincount(y_us)
+    assert counts[0] == counts[1] == counts[2]
+    assert X_us.shape[0] == y_us.shape[0]
+    # Undersampling only removes -- never adds or duplicates.
+    assert X_us.shape[0] <= X_train.shape[0]
+    for row in X_us:
+        assert np.any(np.all(row == X_train, axis=1))
+
+
+def test_invalid_membership_kind_raises():
+    with pytest.raises(ValueError):
+        FuzzyOPF(membership_kind="oops")
+
+
+def test_membership_kinds_satisfy_boundary_conditions(toy_dataset):
+    """Every membership_kind must give sigma at the lowest-density sample
+    and 1.0 at the highest-density one (same boundary conditions as the
+    paper's own Eq. 5) -- otherwise comparisons between shapes would be
+    confounded by unequal ranges, not just curve shape."""
+    X, y = toy_dataset
+    sigma = 0.6
+
+    for kind in ["linear", "quadratic", "cubic", "sigmoid"]:
+        model = FuzzyOPF(k_max=5, sigma=sigma, search_best_k=False, membership_kind=kind)
+        model.fit(X, y)
+        memberships = [node.membership for node in model.subgraph.nodes]
+
+        assert np.isclose(min(memberships), sigma, atol=1e-6), kind
+        assert np.isclose(max(memberships), 1.0, atol=1e-6), kind
+
+
+def test_ensemble_requires_at_least_one_config():
+    from fuzzy_opf import EnsembleFuzzyOPF
+    with pytest.raises(ValueError):
+        EnsembleFuzzyOPF([])
+
+
+def test_ensemble_single_member_matches_that_model(toy_dataset):
+    from fuzzy_opf import EnsembleFuzzyOPF
+
+    X, y = toy_dataset
+    X_train, y_train = X[:80], y[:80]
+    X_test = X[80:]
+
+    cfg = {"k_max": 5, "sigma": 0.6, "search_best_k": False}
+    single = FuzzyOPF(**cfg)
+    single.fit(X_train, y_train)
+
+    ensemble = EnsembleFuzzyOPF([cfg])
+    ensemble.fit(X_train, y_train)
+
+    assert ensemble.predict(X_test) == single.predict(X_test)
+
+
+def test_ensemble_majority_vote(toy_dataset):
+    from fuzzy_opf import EnsembleFuzzyOPF
+
+    X, y = toy_dataset
+    X_train, y_train = X[:80], y[:80]
+    X_test = X[80:]
+
+    ensemble = EnsembleFuzzyOPF([
+        {"k_max": 5, "sigma": 0.4, "search_best_k": False},
+        {"k_max": 10, "sigma": 0.7, "search_best_k": False},
+        {"k_max": 15, "sigma": 1.0, "search_best_k": False},
+    ])
+    ensemble.fit(X_train, y_train)
+    preds = ensemble.predict(X_test)
+
+    assert len(preds) == len(X_test)
+    assert set(preds).issubset(set(y_train))
+
+
+def test_ensemble_from_pareto_front(toy_dataset):
+    from fuzzy_opf import EnsembleFuzzyOPF, nsga2_search
+
+    X, y = toy_dataset
+    X_train, y_train = X[:60], y[:60]
+    X_val, y_val = X[60:90], y[60:90]
+    X_test = X[90:]
+
+    pareto = nsga2_search(
+        X_train, y_train, X_val, y_val,
+        k_max_bounds=(1, 10), n_agents=6, n_iterations=3, search_best_k=False, seed=0,
+    )
+    ensemble = EnsembleFuzzyOPF.from_pareto_front(pareto, search_best_k=False)
+
+    assert len(ensemble.members) == len(pareto.points)
+    ensemble.fit(X_train, y_train)
+    preds = ensemble.predict(X_test)
+    assert len(preds) == len(X_test)
+
+
+def test_wilcoxon_load_paired_accuracies(tmp_path):
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments"))
+    from wilcoxon_test import load_paired_accuracies
+
+    csv_content = (
+        "run,method,k_max,sigma,val_accuracy,test_accuracy,fit_seconds\n"
+        "0,opf,-,-,-,0.80,1.0\n"
+        "0,fuzzy-opf,20,0.6,0.8,0.82,2.0\n"
+        "1,opf,-,-,-,0.85,1.0\n"
+        "1,fuzzy-opf,20,0.6,0.8,0.84,2.0\n"
+    )
+    csv_path = tmp_path / "results.csv"
+    csv_path.write_text(csv_content)
+
+    opf_accs, fuzzy_accs = load_paired_accuracies(str(csv_path))
+    assert opf_accs == [0.80, 0.85]
+    assert fuzzy_accs == [0.82, 0.84]

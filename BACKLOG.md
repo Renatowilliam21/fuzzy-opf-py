@@ -351,11 +351,42 @@ organizadas do mais simples pro mais complicado (ordem de implementação
 sugerida). Ver conversa de 2026-09-20 para a análise completa de
 "já feito / acionável / fora de alcance" por item.
 
-- [ ] **1. Teste de Wilcoxon pareado** (mais simples, mais barato) --
-  calcular sobre os resultados que já temos (20 runs por dataset, mesmos
-  splits para OPF e Fuzzy-OPF) para dar significância estatística formal
-  às comparações, além de só "média ± desvio padrão". Não precisa
-  retreinar nada, é só estatística sobre os CSVs já salvos.
+- [x] **1. Teste de Wilcoxon pareado** — **implementado e concluído em
+  todos os 8 datasets validados**. `experiments/wilcoxon_test.py`
+  (`scipy.stats.wilcoxon`, pareado por run/seed + tamanho de efeito
+  `r=|z|/sqrt(N)`), testado, 26 testes passando.
+
+  **Resultado consolidado** (só significativo a `p<0.05` em 2 de 8):
+
+  | Dataset | Ganho médio | p-valor | Efeito |
+  |---|---|---|---|
+  | Boat | +0.0020 | 0.3173 | pequeno |
+  | Cone-Torus | +0.0000 a +0.0021 | 0.17-0.89 | negligível-médio |
+  | **Data1** | +0.0010 | **0.0422** | médio (significativo) |
+  | Data2 | +0.0027 | 0.2733 | pequeno |
+  | Data3 | +0.0031 | 0.1088 | médio |
+  | **MPEG-7 BAS** | +0.0015 | **0.0007** | grande (significativo) |
+  | Breast Tissue | -0.0056 a +0.0015 | todos n.s. | pequeno-médio (ruído, ver
+  achado do overlap de seeds) |
+  | Thyroid (20 runs, sigma=1.15 fixo -- ver nota abaixo) | -0.0006 | 0.5503
+  | pequeno (empate estatístico) |
+
+  **Nota importante**: nenhuma das buscas anteriores no Thyroid tinha
+  rodado o protocolo oficial de 20 runs (sempre `n_runs=2`, por custo) --
+  os resultados de Thyroid usados em todo o resto do backlog vêm de
+  comparações com N pequeno. Rodamos uma vez com hiperparâmetro FIXO
+  (`k_max=20, sigma=1.15`, sem busca via GA -- ~57min para 20 runs, viável
+  onde 20 runs COM busca seriam horas) especificamente para ter uma
+  amostra válida para o Wilcoxon. Resultado:
+  `results/thyroid/20260921T160914Z_quadratic.csv`.
+
+  **Conclusão para o artigo**: a afirmação defensável não é "Fuzzy-OPF é
+  melhor que OPF" de forma geral (os dados não sustentam isso com rigor
+  estatístico) -- é "Fuzzy-OPF nunca é significativamente pior, às vezes é
+  significativamente melhor (efeito grande no MPEG-7 BAS), e na maioria
+  dos casos os dois são estatisticamente indistinguíveis". Mais sutil, mas
+  mais defensável e resistente a crítica de revisor do que uma alegação
+  inflada de superioridade geral.
 - [ ] **2. AUC-ROC** -- métrica adicional para datasets desbalanceados
   (Thyroid especialmente), complementando a matriz de confusão que já
   fizemos. Barato, não precisa retreinar.

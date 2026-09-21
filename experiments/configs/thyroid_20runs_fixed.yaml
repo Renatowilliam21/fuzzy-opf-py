@@ -1,0 +1,21 @@
+dataset: data/raw/thyroid.txt
+n_runs: 20
+seed: 0
+search_best_k: false
+membership_side: target
+normalize: true
+
+# Hiperparametro FIXO (sem busca via GA) -- sigma=1.15 esta bem no meio da
+# regiao boa que a busca convergiu repetidamente ao longo de toda essa
+# investigacao (sigma entre 1.11 e 1.16 em varios testes independentes:
+# sweep exaustivo, GA/PSO/Random/Bayesiano com populacao adequada, NSGA-II).
+# k_max=20 tambem ja confirmado (via NSGA-II) como suficiente -- k_max
+# maior nao da ganho real no Thyroid.
+#
+# Sem busca, o custo por run cai bastante (~170s: ~50s OPF + ~120s
+# Fuzzy-OPF), entao 20 runs ficam viaveis (~57min total) onde 20 runs
+# COM busca via GA seriam proibitivos (horas por run).
+tuning:
+  method: fixed
+  k_max: 20
+  sigma: 1.15
