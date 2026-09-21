@@ -1,0 +1,3 @@
+method,auc_roc_macro,recall_class_0,recall_class_1,recall_class_2
+opf,0.8598,0.6364,0.3421,0.9850
+fuzzy-opf,0.8544,0.7273,0.3421,0.9775

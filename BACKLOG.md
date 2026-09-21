@@ -387,9 +387,32 @@ sugerida). Ver conversa de 2026-09-20 para a análise completa de
   dos casos os dois são estatisticamente indistinguíveis". Mais sutil, mas
   mais defensável e resistente a crítica de revisor do que uma alegação
   inflada de superioridade geral.
-- [ ] **2. AUC-ROC** -- métrica adicional para datasets desbalanceados
-  (Thyroid especialmente), complementando a matriz de confusão que já
-  fizemos. Barato, não precisa retreinar.
+- [x] **2. AUC-ROC** -- **implementado e testado**. `FuzzyOPF.
+  predict_class_scores()` faz uma varredura completa (sem poda) pra obter
+  um score de confiança por classe (não só a vencedora) -- confirmado por
+  teste formal que a classe de maior score sempre bate com `predict()`.
+  `auc_roc_test.py` compara Fuzzy-OPF contra um "OPF equivalente"
+  (`sigma=1`, matematicamente igual ao OPF puro pela própria teoria do
+  artigo) via AUC-ROC macro (one-vs-rest) + recall por classe. 27 testes
+  passando.
+
+  **Achado interessante no Cone-Torus**: mesmo quando a decisão final
+  (accuracy/recall) é idêntica entre sigma=0.9 e sigma=1 (platô plano já
+  visto em todo teste nesse dataset), a **AUC-ROC difere** (0.8945 vs.
+  0.9047) -- a pertinência muda a confiança relativa mesmo sem mudar qual
+  classe "vence", algo que accuracy/recall (que só olham a decisão final)
+  não capturam. AUC-ROC revela uma diferença que outras métricas escondem.
+
+  **Testado no Thyroid** (sigma=1.15, sem balanceamento): AUC-ROC
+  OPF=0.8598 vs. Fuzzy-OPF=0.8544 (-0.0054, consistente com o empate
+  estatístico já visto no Wilcoxon nesse mesmo sigma). Por classe: recall
+  da classe 0 melhora bastante com Fuzzy-OPF (0.6364->0.7273, +9pp), classe
+  2 piora um pouco (0.9850->0.9775, -0.75pp), classe 1 (minoritária, mais
+  difícil) empata exatamente (0.3421 nos dois). **Conclusão**: não é uma
+  derrota uniforme, é um trade-off de recall entre classes -- reforça a
+  leitura madura já estabelecida pelo Wilcoxon (sem balanceamento, os dois
+  são essencialmente equivalentes no Thyroid, com nuances pequenas e
+  específicas por classe, não uma vantagem clara de um lado).
 - [ ] **3. Baselines externos** (SVM com kernel RBF, Random Forest,
   XGBoost/LightGBM, k-NN fuzzy) -- hoje só comparamos Fuzzy-OPF vs. OPF
   padrão; nunca comparamos contra classificadores fora da família OPF.
