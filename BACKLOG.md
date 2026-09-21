@@ -219,7 +219,9 @@ extensões para priorizar depois.
   `results/thyroid/pareto_20260918T201804Z.csv`.
 - [ ] **CEM**: revisitar quando a `opytimizer` corrigir o bug de
   compatibilidade com NumPy 2.x (`cem_search` já existe, documentado como
-  quebrado).
+  quebrado). **Reportado oficialmente**:
+  https://github.com/recogna-lab/opytimizer/issues/10 (2026-09-21).
+  Verificar periodicamente se foi corrigido antes de tentar de novo.
 - [x] **Funções de pertinência alternativas** — **implementado, testado e
   investigado até conclusão definitiva**. `membership_kind` (linear,
   quadratic [Eq. 5 original], cubic, sigmoid) em `FuzzyOPF`, todas
@@ -273,10 +275,26 @@ extensões para priorizar depois.
   entre k_max=1 e k_max=8, achado do NSGA-II original), então os 12
   membros do ensemble são parecidos demais entre si para haver diversidade
   de erro que a votação possa corrigir -- ensemble só ganha força real
-  quando os membros discordam de forma útil. **Conclusão**: para o
-  Thyroid, um único Fuzzy-OPF bem ajustado já captura o que o ensemble
-  captura; o ganho do ensemble, se existir em geral, não aparece aqui por
-  falta de diversidade real entre os candidatos do front.
+  quando os membros discordam de forma útil.
+
+  **Testado também no MPEG-7 BAS** (70 classes, 180 atributos --
+  estruturalmente bem diferente do Thyroid, front de 20 membros,
+  `k_max_bounds=[1,150]`, `n_agents=20, n_iterations=15`): single_best=0.9165
+  (k_max=1, sigma=0.813) vs. ensemble=0.9165 -- **empate exato**.
+
+  **Conclusão final (2 datasets estruturalmente diferentes, mesmo
+  padrão)**: o ensemble construído a partir do front de Pareto do
+  Fuzzy-OPF **não supera o melhor modelo único** -- não é peculiaridade do
+  Thyroid, é um padrão observado (ainda não testado nos outros 6
+  datasets). Hipótese consistente nos dois casos: os pontos de um front de
+  Pareto são, por construção, próximos em desempenho (senão não seriam
+  Pareto-ótimos todos ao mesmo tempo), então tendem a errar nos mesmos
+  casos -- a fonte de diversidade que faria um ensemble valer a pena
+  (membros que discordam de forma útil) não vem naturalmente de um front
+  de Pareto. Achado honesto e informativo para o artigo: motiva a técnica,
+  testa rigorosamente, e reporta um resultado negativo bem explicado --
+  mesmo padrão de rigor já usado no achado do oversampling simples vs.
+  SMOTE.
 ## Infraestrutura / publicação
 
 - [ ] **Publicar no PyPI** — hoje só instala via clone + `pip install -e .`.
