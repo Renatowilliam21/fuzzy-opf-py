@@ -22,6 +22,7 @@ import numpy as np
 
 from opfython.stream import loader, parser
 from opfython.utils import converter
+from opfython.core.subgraph import Subgraph
 
 
 def load_dataset(path: str | Path) -> tuple[np.ndarray, np.ndarray]:
@@ -337,3 +338,126 @@ def stratified_kfold_indices(y: np.ndarray, n_splits: int, random_state: int | N
         val_idx = all_idx[fold_assignment == fold]
         train_idx = all_idx[fold_assignment != fold]
         yield train_idx, val_idx
+
+
+def _predict_with_conqueror(model, X_query: np.ndarray):
+    """Like FuzzyOPF.predict(), but also returns WHICH training sample
+    (its index into X_train/model.subgraph.nodes) conquered each query
+    point -- needed by opf_us_undersample() below, and not exposed by the
+    normal predict() path (which only returns labels). Duplicates
+    predict()'s loop rather than reusing it because there is no other way
+    to recover this per-query "who conquered it" information from the
+    delegated opfython implementation.
+
+    Returns:
+        (labels, conqueror_indices): two lists, one entry per query point.
+    """
+    subgraph = model.subgraph
+    pred_subgraph = Subgraph(X_query)
+
+    labels, conquerors = [], []
+    for i in range(pred_subgraph.n_nodes):
+        j = 0
+        k = subgraph.idx_nodes[j]
+        weight = model.distance_fn(subgraph.nodes[k].features, pred_subgraph.nodes[i].features)
+        min_cost = np.maximum(subgraph.nodes[k].cost, weight)
+        current_label = subgraph.nodes[k].predicted_label
+        current_k = k
+
+        while j < subgraph.n_nodes - 1 and min_cost > subgraph.nodes[subgraph.idx_nodes[j + 1]].cost:
+            l = subgraph.idx_nodes[j + 1]
+            weight = model.distance_fn(subgraph.nodes[l].features, pred_subgraph.nodes[i].features)
+            tmp = np.maximum(subgraph.nodes[l].cost, weight)
+            if tmp < min_cost:
+                min_cost = tmp
+                current_label = subgraph.nodes[l].predicted_label
+                current_k = l
+            j += 1
+            k = l
+
+        labels.append(current_label)
+        conquerors.append(current_k)
+
+    return labels, conquerors
+
+
+def opf_us_undersample(
+    X_train: np.ndarray,
+    Y_train: np.ndarray,
+    X_val: np.ndarray,
+    Y_val: np.ndarray,
+    k_max: int = 20,
+    sigma: float = 0.6,
+    search_best_k: bool = False,
+    membership_side: str = "target",
+) -> tuple[np.ndarray, np.ndarray]:
+    """OPF-US: undersample non-minority classes using the OPF's OWN
+    competition process to score training-sample importance, instead of a
+    generic distance-based undersampling rule.
+
+    From Passos, Jodas, Ribeiro, de Souza & Papa, "Handling Imbalanced
+    Datasets Through Optimum-Path Forest" (2022) -- the same research
+    group behind the original Fuzzy-OPF paper. Their results found
+    OPF-native undersampling (OPF-US) generally outperforming generic
+    oversampling (including SMOTE) on the *standard* OPF; this is a port
+    of their scoring mechanism to work with FuzzyOPF specifically, to
+    compare directly against smote_oversample() on the Fuzzy-OPF (see
+    BACKLOG.md for the SMOTE finding this complements).
+
+    Procedure: fit a FuzzyOPF on X_train/Y_train, then classify X_val and
+    track WHICH training sample conquered each validation point (see
+    _predict_with_conqueror). Every training sample's score starts at 0;
+    it goes +1 each time it conquers a correctly-classified validation
+    point, -1 each time it conquers an incorrectly-classified one. Samples
+    that are frequently right when they conquer are informative and kept;
+    samples that are frequently wrong are likely near class boundaries or
+    outliers and are the first candidates for removal. For every class
+    with more samples than the minority class, only the
+    highest-scored samples are kept, down to the minority count (full
+    balance, matching how smote_oversample/oversample_minority_classes's
+    default "balance" strategy is used in this project's comparisons).
+
+    Unlike the original paper (binary datasets only), this generalizes to
+    multi-class directly: each non-minority class is pruned independently
+    by its own scores.
+
+    Args:
+        X_train, Y_train: Training split to undersample.
+        X_val, Y_val: Validation split used to score training samples
+            (never touched/modified -- only used for scoring here).
+        k_max, sigma, search_best_k, membership_side: Hyperparameters for
+            the FuzzyOPF fit during scoring.
+
+    Returns:
+        (X_undersampled, Y_undersampled): every class reduced to the
+        minority class's sample count.
+    """
+    from .model import FuzzyOPF
+
+    model = FuzzyOPF(k_max=k_max, sigma=sigma, search_best_k=search_best_k, membership_side=membership_side)
+    model.fit(X_train, Y_train)
+
+    preds, conquerors = _predict_with_conqueror(model, X_val)
+
+    score = np.zeros(X_train.shape[0], dtype=int)
+    for i, k in enumerate(conquerors):
+        score[k] += 1 if preds[i] == Y_val[i] else -1
+
+    counts = {label: np.sum(Y_train == label) for label in np.unique(Y_train)}
+    min_count = min(counts.values())
+
+    keep_idx = []
+    for label, count in counts.items():
+        class_idx = np.flatnonzero(Y_train == label)
+        if count <= min_count:
+            keep_idx.extend(class_idx.tolist())
+            continue
+
+        n_remove = count - min_count
+        class_scores = score[class_idx]
+        order = np.argsort(class_scores)  # ascending: lowest (least useful) first
+        removed = set(order[:n_remove].tolist())
+        keep_idx.extend(class_idx[i] for i in range(len(class_idx)) if i not in removed)
+
+    keep_idx = np.array(sorted(keep_idx))
+    return X_train[keep_idx], Y_train[keep_idx]

@@ -62,6 +62,7 @@ class FuzzyOPF(OPF):
         sigma: float = 0.6,
         search_best_k: bool = True,
         membership_side: MembershipSide = "target",
+        membership_kind: str = "quadratic",
         distance: str = "log_squared_euclidean",
     ) -> None:
         """
@@ -77,6 +78,30 @@ class FuzzyOPF(OPF):
                 neighbourhood size (equivalent to the plain ``fuzzy.c``
                 driver, which skips the min-cut search).
             membership_side: See module docstring.
+            membership_kind: Shape of the membership curve between
+                rho_min (-> sigma) and rho_max (-> 1). "quadratic" is the
+                paper's own Eq. 5. All other shapes satisfy the same two
+                boundary conditions (F(rho_min)=sigma, F(rho_max)=1) by
+                construction, so they are directly comparable -- only the
+                curve's shape in between differs:
+                  - "linear": F(t) = (1-sigma)*t + sigma. Uniform rate of
+                    change; the simplest possible baseline.
+                  - "quadratic" (default, Eq. 5): F(t) = (1-sigma)*t^2 + sigma.
+                    Flat near rho_min, steepens toward rho_max -- typical
+                    samples (high density) are pulled toward full
+                    membership faster than atypical ones are pulled away
+                    from sigma.
+                  - "cubic": F(t) = (1-sigma)*t^3 + sigma. Same idea as
+                    quadratic but more pronounced -- membership stays
+                    close to sigma for a wider range of below-average
+                    densities before rising sharply near rho_max.
+                  - "sigmoid": S-shaped (logistic), steep in the middle of
+                    the density range and flat at both ends -- unlike the
+                    others, treats samples near the MEDIAN density as the
+                    most "decisive" region, rather than always favouring
+                    high density.
+                See ``t`` in ``_compute_membership``: the normalized
+                density (rho - rho_min) / (rho_max - rho_min) in [0, 1].
             distance: Distance metric name registered in opfython.
         """
         if not 0.0 < sigma <= 1.5:
@@ -87,6 +112,11 @@ class FuzzyOPF(OPF):
             raise ValueError(
                 f"`membership_side` must be 'target' or 'source', got {membership_side!r}."
             )
+        if membership_kind not in ("linear", "quadratic", "cubic", "sigmoid"):
+            raise ValueError(
+                f"`membership_kind` must be one of 'linear', 'quadratic', 'cubic', 'sigmoid', "
+                f"got {membership_kind!r}."
+            )
 
         logger.info("Overriding class: OPF -> FuzzyOPF.")
         super().__init__(distance, pre_computed_distance=None)
@@ -95,6 +125,7 @@ class FuzzyOPF(OPF):
         self.sigma = sigma
         self.search_best_k = search_best_k
         self.membership_side = membership_side
+        self.membership_kind = membership_kind
 
         self._cluster_model: UnsupervisedOPF | None = None
 
@@ -121,7 +152,27 @@ class FuzzyOPF(OPF):
             )
             return np.ones_like(rho)
 
-        return (1.0 - self.sigma) * ((rho - rho_min) / spread) ** 2 + self.sigma
+        t = (rho - rho_min) / spread
+
+        if self.membership_kind == "linear":
+            return (1.0 - self.sigma) * t + self.sigma
+        elif self.membership_kind == "cubic":
+            return (1.0 - self.sigma) * t**3 + self.sigma
+        elif self.membership_kind == "sigmoid":
+            # Logistic curve, steepness fixed at k=10 (steep enough to be
+            # visibly S-shaped without being a near step-function).
+            # Normalized so F(0)=sigma and F(1)=1 EXACTLY (a raw logistic
+            # never quite reaches its asymptotes at finite t) -- otherwise
+            # this wouldn't satisfy the same boundary conditions as the
+            # other three shapes, and comparisons between them would be
+            # confounded by unequal ranges, not just curve shape.
+            k = 10.0
+            raw = 1.0 / (1.0 + np.exp(-k * (t - 0.5)))
+            raw_0 = 1.0 / (1.0 + np.exp(k * 0.5))
+            raw_1 = 1.0 / (1.0 + np.exp(-k * 0.5))
+            return self.sigma + (1.0 - self.sigma) * (raw - raw_0) / (raw_1 - raw_0)
+        else:  # "quadratic" (default): Eq. 5 of the paper, unchanged.
+            return (1.0 - self.sigma) * t**2 + self.sigma
 
     # ------------------------------------------------------------------ #
     # Training (Algorithm 3)
@@ -247,6 +298,56 @@ class FuzzyOPF(OPF):
         previous hand-copied version silently lacked.
         """
         return SupervisedOPF.predict(self, X_val)
+
+    def predict_class_scores(self, X_val: np.ndarray) -> np.ndarray:
+        """For each query point, returns a confidence score per class --
+        needed for AUC-ROC, which plain ``predict()`` (single winning
+        label, no per-class scores) cannot provide on its own.
+
+        The OPF competition process finds the single globally-cheapest
+        path for each query, pruning the search once a candidate beats the
+        best cost seen so far (see ``predict()``'s delegated loop) -- it
+        never needs to know the best cost reachable through EVERY class,
+        only the overall winner. To get a genuine per-class score, this
+        method instead does a full, unpruned scan of every training node
+        for every query point, tracking the minimum path cost separately
+        per class. That minimum cost is converted to a bounded,
+        monotonically-decreasing "confidence" via ``1 / (1 + cost)`` (lower
+        cost -> higher confidence), suitable as the decision score
+        ``sklearn.metrics.roc_auc_score`` expects (does not need to sum to
+        1 across classes for the one-vs-rest AUC computation).
+
+        This is more expensive than ``predict()`` (no early pruning), same
+        asymptotic O(n_train) per query either way, but likely visits more
+        nodes in practice -- use it only when AUC-ROC (or similar
+        per-class-score metrics) is actually needed, not as a drop-in
+        replacement for predict().
+
+        Returns:
+            (n_query, n_classes) array; column order matches
+            ``sorted(set(label for label in training labels))``.
+        """
+        classes = sorted({node.label for node in self.subgraph.nodes})
+        class_to_col = {c: i for i, c in enumerate(classes)}
+
+        pred_subgraph = Subgraph(X_val)
+        scores = np.full((pred_subgraph.n_nodes, len(classes)), np.inf)
+
+        for i in range(pred_subgraph.n_nodes):
+            for node in self.subgraph.nodes:
+                weight = self.distance_fn(node.features, pred_subgraph.nodes[i].features)
+                cost = np.maximum(node.cost, weight)
+                col = class_to_col[node.predicted_label]
+                if cost < scores[i, col]:
+                    scores[i, col] = cost
+
+        raw_scores = 1.0 / (1.0 + scores)
+        # sklearn's roc_auc_score(multi_class="ovr") requires each row to
+        # sum to 1 (it treats the input as a probability matrix even
+        # though OVR-AUC only actually needs correct RELATIVE ranking
+        # within each class's column) -- row-normalize to satisfy that
+        # constraint without changing the within-row ranking.
+        return raw_scores / raw_scores.sum(axis=1, keepdims=True)
 
     def prune(
         self,

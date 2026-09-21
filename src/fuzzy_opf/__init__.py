@@ -14,27 +14,34 @@ import opfython.utils.logging as _opf_logging
 _opf_logging.get_timed_file_handler = _logging.NullHandler
 
 from .model import FuzzyOPF
-from .tuning import genetic_search, pso_search, cem_search, random_search, TuningResult
+from .ensemble import EnsembleFuzzyOPF
+from .tuning import genetic_search, pso_search, cem_search, random_search, bayesian_search, nsga2_search, TuningResult, ParetoResult
 from .datasets import (
     load_dataset,
     standardize,
     stratified_split,
     oversample_minority_classes,
     smote_oversample,
+    opf_us_undersample,
     apply_balance,
 )
 
 __all__ = [
     "FuzzyOPF",
+    "EnsembleFuzzyOPF",
     "genetic_search",
     "pso_search",
     "cem_search",
     "random_search",
+    "bayesian_search",
+    "nsga2_search",
     "TuningResult",
+    "ParetoResult",
     "load_dataset",
     "standardize",
     "stratified_split",
     "oversample_minority_classes",
     "smote_oversample",
+    "opf_us_undersample",
     "apply_balance",
 ]

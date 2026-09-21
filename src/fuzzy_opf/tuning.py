@@ -30,6 +30,7 @@ from opytimizer.core.optimizer import Optimizer
 from opytimizer.optimizers.single_objective.evolutionary.ga import GA
 from opytimizer.optimizers.single_objective.misc.cem import CEM
 from opytimizer.optimizers.single_objective.swarm.pso import PSO
+from opytimizer.optimizers.multi_objective.evolutionary.nsga2 import NSGA2
 from opytimizer.spaces.search import SearchSpace
 
 from opfython.math.general import opf_accuracy
@@ -55,6 +56,20 @@ class TuningResult:
     the real count is typically higher than that nominal product -- this
     field is the ground truth, measured by wrapping the fitness function
     with a counter, not inferred from the search configuration."""
+
+
+@dataclass
+class ParetoResult:
+    """Result of a multi-objective search (nsga2_search): a whole Pareto
+    front instead of a single best point, since accuracy and
+    computational cost trade off against each other -- there is no single
+    "best" (k_max, sigma) once cost matters too, only a frontier of
+    non-dominated choices.
+    """
+    points: list  # list of (k_max, sigma, accuracy) tuples, one per
+    # non-dominated point on the front, sorted by k_max ascending.
+    n_evaluations: int
+    history: object
 
 
 @contextmanager
@@ -87,6 +102,7 @@ def _make_fitness(
     k_max_bounds: tuple[int, int],
     search_best_k: bool,
     membership_side: str,
+    membership_kind: str,
     distance: str,
     cluster_cache: dict | None = None,
 ) -> Callable[[np.ndarray], float]:
@@ -128,6 +144,7 @@ def _make_fitness(
             sigma=sigma,
             search_best_k=search_best_k,
             membership_side=membership_side,
+            membership_kind=membership_kind,
             distance=distance,
         )
         # Reuses FuzzyOPF.fit's actual training code path (no duplicated
@@ -157,6 +174,7 @@ def _make_cv_fitness(
     k_max_bounds: tuple[int, int],
     search_best_k: bool,
     membership_side: str,
+    membership_kind: str,
     distance: str,
 ) -> Callable[[np.ndarray], float]:
     """Like _make_fitness, but scores each candidate (k_max, sigma) by mean
@@ -196,7 +214,7 @@ def _make_cv_fitness(
         for train_idx, val_idx in stratified_kfold_indices(Y_pool, cv_folds, random_state=0):
             model = FuzzyOPF(
                 k_max=k_max, sigma=sigma, search_best_k=search_best_k,
-                membership_side=membership_side, distance=distance,
+                membership_side=membership_side, membership_kind=membership_kind, distance=distance,
             )
             model.fit(X_pool[train_idx], Y_pool[train_idx])
             accs.append(opf_accuracy(Y_pool[val_idx], model.predict(X_pool[val_idx])))
@@ -218,6 +236,7 @@ def _run_metaheuristic_search(
     n_iterations: int,
     search_best_k: bool,
     membership_side: str,
+    membership_kind: str,
     distance: str,
     seed: int | None,
     cluster_cache: dict | None = None,
@@ -255,11 +274,11 @@ def _run_metaheuristic_search(
         )
         if cv_folds is not None:
             fitness_fn = _make_cv_fitness(
-                X_train, Y_train, cv_folds, k_max_bounds, search_best_k, membership_side, distance,
+                X_train, Y_train, cv_folds, k_max_bounds, search_best_k, membership_side, membership_kind, distance,
             )
         else:
             fitness_fn = _make_fitness(
-                X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance,
+                X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, membership_kind, distance,
                 cluster_cache=cluster_cache,
             )
         function = Function(fitness_fn)
@@ -288,6 +307,7 @@ def genetic_search(
     n_iterations: int = 30,
     search_best_k: bool = True,
     membership_side: str = "target",
+    membership_kind: str = "quadratic",
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
     cluster_cache: dict | None = None,
@@ -314,7 +334,7 @@ def genetic_search(
     """
     return _run_metaheuristic_search(
         GA(), X_train, Y_train, X_val, Y_val, k_max_bounds,
-        n_agents, n_iterations, search_best_k, membership_side, distance, seed,
+        n_agents, n_iterations, search_best_k, membership_side, membership_kind, distance, seed,
         cluster_cache=cluster_cache, cv_folds=cv_folds,
     )
 
@@ -329,6 +349,7 @@ def pso_search(
     n_iterations: int = 30,
     search_best_k: bool = True,
     membership_side: str = "target",
+    membership_kind: str = "quadratic",
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
     cluster_cache: dict | None = None,
@@ -339,7 +360,7 @@ def pso_search(
     see genetic_search's docstring for argument details."""
     return _run_metaheuristic_search(
         PSO(), X_train, Y_train, X_val, Y_val, k_max_bounds,
-        n_agents, n_iterations, search_best_k, membership_side, distance, seed,
+        n_agents, n_iterations, search_best_k, membership_side, membership_kind, distance, seed,
         cluster_cache=cluster_cache, cv_folds=cv_folds,
     )
 
@@ -354,6 +375,7 @@ def cem_search(
     n_iterations: int = 30,
     search_best_k: bool = True,
     membership_side: str = "target",
+    membership_kind: str = "quadratic",
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
     cluster_cache: dict | None = None,
@@ -378,7 +400,7 @@ def cem_search(
     """
     return _run_metaheuristic_search(
         CEM(), X_train, Y_train, X_val, Y_val, k_max_bounds,
-        n_agents, n_iterations, search_best_k, membership_side, distance, seed,
+        n_agents, n_iterations, search_best_k, membership_side, membership_kind, distance, seed,
         cluster_cache=cluster_cache, cv_folds=cv_folds,
     )
 
@@ -392,6 +414,7 @@ def random_search(
     n_evaluations: int = 450,
     search_best_k: bool = True,
     membership_side: str = "target",
+    membership_kind: str = "quadratic",
     distance: str = "log_squared_euclidean",
     seed: int | None = None,
     cluster_cache: dict | None = None,
@@ -416,11 +439,11 @@ def random_search(
 
     if cv_folds is not None:
         fitness = _make_cv_fitness(
-            X_train, Y_train, cv_folds, k_max_bounds, search_best_k, membership_side, distance,
+            X_train, Y_train, cv_folds, k_max_bounds, search_best_k, membership_side, membership_kind, distance,
         )
     else:
         fitness = _make_fitness(
-            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, distance,
+            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, membership_kind, distance,
             cluster_cache=cluster_cache,
         )
 
@@ -441,3 +464,198 @@ def random_search(
         k_max=best_k_max, sigma=best_sigma, accuracy=best_acc, history=trace,
         n_evaluations=fitness.n_calls,
     )
+
+
+def bayesian_search(
+    X_train: np.ndarray,
+    Y_train: np.ndarray,
+    X_val: np.ndarray,
+    Y_val: np.ndarray,
+    k_max_bounds: tuple[int, int] = (1, 150),
+    n_trials: int = 30,
+    search_best_k: bool = True,
+    membership_side: str = "target",
+    membership_kind: str = "quadratic",
+    distance: str = "log_squared_euclidean",
+    seed: int | None = None,
+    cluster_cache: dict | None = None,
+    cv_folds: int | None = None,
+) -> TuningResult:
+    """Bayesian Optimization (Tree-structured Parzen Estimator, via Optuna)
+    for (k_max, sigma).
+
+    The natural candidate for the "sample-efficient, model-based" slot in
+    the search-method comparison, after CEM turned out to be broken in the
+    installed opytimizer version (see cem_search's docstring) -- outside
+    the Recogna/opytimizer ecosystem (Optuna is a separate, independent
+    dependency), but this is exactly the regime (few dimensions, expensive
+    evaluations) where Bayesian methods are expected to need fewer
+    evaluations than population-based search (GA/PSO) or random sampling
+    to find a good point, by building a probabilistic model of the
+    objective and choosing where to sample next instead of exploring
+    blindly.
+
+    Unlike genetic_search/pso_search, n_trials maps EXACTLY to
+    n_evaluations (Optuna calls the objective once per trial, no
+    population-inflation like GA/PSO's generational evaluation -- see
+    TuningResult.n_evaluations' docstring), so budget comparisons against
+    the other methods are direct here, no real/nominal distinction needed.
+
+    Args:
+        Same as genetic_search, except n_trials replaces n_agents/n_iterations
+        (there's no population here, just a sequence of trials).
+
+    Returns:
+        TuningResult with the best (k_max, sigma) and validation accuracy.
+    """
+    import optuna
+
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+    k_lo, k_hi = k_max_bounds
+
+    if cv_folds is not None:
+        raw_fitness = _make_cv_fitness(
+            X_train, Y_train, cv_folds, k_max_bounds, search_best_k, membership_side, membership_kind, distance,
+        )
+    else:
+        raw_fitness = _make_fitness(
+            X_train, Y_train, X_val, Y_val, k_max_bounds, search_best_k, membership_side, membership_kind, distance,
+            cluster_cache=cluster_cache,
+        )
+
+    def objective(trial: "optuna.Trial") -> float:
+        k_max = trial.suggest_int("k_max", k_lo, k_hi)
+        sigma = trial.suggest_float("sigma", *SIGMA_BOUNDS)
+        x = np.array([[k_max], [sigma]], dtype=float)
+        return raw_fitness(x)
+
+    sampler = optuna.samplers.TPESampler(seed=seed)
+    with _seeded_global_rng(seed):
+        study = optuna.create_study(direction="minimize", sampler=sampler)
+        study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+
+    best_k_max = int(study.best_params["k_max"])
+    best_sigma = float(study.best_params["sigma"])
+    best_acc = 1.0 - float(study.best_value)
+
+    return TuningResult(
+        k_max=best_k_max, sigma=best_sigma, accuracy=best_acc, history=study,
+        n_evaluations=raw_fitness.n_calls,
+    )
+
+
+def nsga2_search(
+    X_train: np.ndarray,
+    Y_train: np.ndarray,
+    X_val: np.ndarray,
+    Y_val: np.ndarray,
+    k_max_bounds: tuple[int, int] = (1, 150),
+    n_agents: int = 20,
+    n_iterations: int = 30,
+    search_best_k: bool = True,
+    membership_side: str = "target",
+    membership_kind: str = "quadratic",
+    distance: str = "log_squared_euclidean",
+    seed: int | None = None,
+    cluster_cache: dict | None = None,
+) -> ParetoResult:
+    """Multi-objective search (NSGA-II) trading off accuracy against
+    computational cost, instead of picking one "best" (k_max, sigma).
+
+    Every other search function in this module optimizes accuracy alone,
+    implicitly treating k_max as "however big it needs to be" -- but the
+    paper's own "Computational Burden" discussion, and everything this
+    project measured about Thyroid (clustering cost scaling with k_max,
+    hours-long runs), says cost is a real second objective, not
+    negligible. NSGA-II returns the whole Pareto front of (k_max, sigma)
+    choices: for each point on it, no other point achieves both equal-or-
+    better accuracy AND equal-or-lower k_max -- so picking a smaller k_max
+    from the front is a genuine, quantified trade-off, not a guess.
+
+    Objectives (both minimized): (1) validation error (1 - accuracy); (2)
+    k_max itself, as a deterministic, reproducible proxy for computational
+    cost -- wall-clock time was considered but rejected: this project's
+    own experiments (see BACKLOG.md) measured 2-3x run-to-run variance in
+    wall time under system/OS noise unrelated to the actual algorithm,
+    which would make it a noisy, non-reproducible objective.
+
+    Both objectives are evaluated from a SINGLE FuzzyOPF fit per agent
+    (memoized by exact (k_max, sigma), since opytimizer's Function calls
+    each objective callable separately for the same position) -- not
+    trained twice.
+
+    Args:
+        Same as genetic_search. n_agents/n_iterations behave as in a
+        normal GA (NSGA-II is evolutionary): population size and number of
+        generations, not agents-vs-iterations budget-split like
+        run_hyperparam_search.py's single-objective heuristic.
+
+    Returns:
+        ParetoResult with every non-dominated (k_max, sigma, accuracy)
+        found, sorted by k_max ascending (so points[0] is the cheapest,
+        points[-1] the most accurate).
+    """
+    k_lo, k_hi = k_max_bounds
+    cache = {} if cluster_cache is None else cluster_cache
+    position_cache: dict[tuple[int, float], float] = {}
+    n_calls = [0]
+
+    def _cached_cluster_model(k_max: int) -> UnsupervisedOPF:
+        if k_max not in cache:
+            min_k = 1 if search_best_k else k_max
+            cluster_model = UnsupervisedOPF(min_k=min_k, max_k=k_max, distance=distance)
+            cluster_model.fit(X_train, Y_train)
+            cache[k_max] = cluster_model
+        return cache[k_max]
+
+    def _evaluate(x: np.ndarray) -> float:
+        k_max = int(np.clip(round(x[0, 0]), k_lo, k_hi))
+        sigma = float(np.clip(x[1, 0], *SIGMA_BOUNDS))
+        key = (k_max, round(sigma, 6))
+
+        if key not in position_cache:
+            n_calls[0] += 1
+            cluster_model = _cached_cluster_model(k_max)
+            model = FuzzyOPF(
+                k_max=k_max, sigma=sigma, search_best_k=search_best_k,
+                membership_side=membership_side, membership_kind=membership_kind, distance=distance,
+            )
+            model.fit(X_train, Y_train, precomputed_cluster_model=cluster_model)
+            acc = opf_accuracy(Y_val, model.predict(X_val))
+            position_cache[key] = acc
+
+        return position_cache[key]
+
+    def objective_error(x: np.ndarray) -> float:
+        return 1.0 - _evaluate(x)
+
+    def objective_cost(x: np.ndarray) -> float:
+        return float(int(np.clip(round(x[0, 0]), k_lo, k_hi)))
+
+    n_variables = 2
+    lower_bound = [k_lo, SIGMA_BOUNDS[0]]
+    upper_bound = [k_hi, SIGMA_BOUNDS[1]]
+
+    with _seeded_global_rng(seed):
+        space = SearchSpace(
+            n_agents=n_agents, n_variables=n_variables, n_objectives=2,
+            lower_bound=lower_bound, upper_bound=upper_bound,
+        )
+        function = Function([objective_error, objective_cost])
+        optimizer = NSGA2()
+
+        task = Opytimizer(space, optimizer, function, save_agents=False)
+        history = task.start(n_iterations=n_iterations)
+
+    pareto_points = set()
+    for agent, rank in zip(space.agents, optimizer.rank):
+        if rank == 0:  # non-dominated
+            k_max = int(np.clip(round(agent.position[0, 0]), k_lo, k_hi))
+            sigma = float(np.clip(agent.position[1, 0], *SIGMA_BOUNDS))
+            acc = 1.0 - float(agent.fit[0])
+            pareto_points.add((k_max, sigma, acc))
+
+    points = sorted(pareto_points, key=lambda p: p[0])
+
+    return ParetoResult(points=points, n_evaluations=n_calls[0], history=history)
