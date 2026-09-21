@@ -253,10 +253,30 @@ extensões para priorizar depois.
   **Resolvido**: `experiments/compare_distances.py` implementado e
   testado no Cone-Torus (mostrou diferença real: cosseno bem pior que as
   demais nesse dataset).
-- [ ] **Ensemble de Fuzzy-OPF** — treinar vários modelos com
-  `(k_max, sigma)` diferentes (ex.: top-5 do histórico do GA) e combinar
-  por votação.
+- [x] **Ensemble de Fuzzy-OPF** — **implementado e testado**.
+  `EnsembleFuzzyOPF` (votação majoritária, com desempate determinístico)
+  aceita qualquer lista de configurações de hiperparâmetros, ou pode ser
+  montado diretamente a partir de um front de Pareto do `nsga2_search`
+  (`EnsembleFuzzyOPF.from_pareto_front`) -- cada ponto do front já é, por
+  definição, não-dominado, então é uma fonte de membros diversos e
+  principiada, não arbitrária. Script `compare_ensemble.py` +
+  config `ensemble_thyroid.yaml` prontos (compara ensemble vs. o melhor
+  modelo único do mesmo front). 25 testes passando, incluindo verificação
+  de que um ensemble de 1 membro reproduz exatamente as previsões desse
+  modelo sozinho.
 
+  **Testado no Thyroid** (front de 12 membros, `k_max_bounds=[1,100]`):
+  single_best=0.7543 (k_max=8, sigma=1.125) vs. ensemble=0.7548 --
+  diferença de +0.0005, essencialmente empate (bem dentro do ruído já
+  observado, ~0.005-0.01, em toda essa investigação). Explicação: o front
+  de Pareto do Thyroid tem variação pequena entre seus pontos (só 0.0068
+  entre k_max=1 e k_max=8, achado do NSGA-II original), então os 12
+  membros do ensemble são parecidos demais entre si para haver diversidade
+  de erro que a votação possa corrigir -- ensemble só ganha força real
+  quando os membros discordam de forma útil. **Conclusão**: para o
+  Thyroid, um único Fuzzy-OPF bem ajustado já captura o que o ensemble
+  captura; o ganho do ensemble, se existir em geral, não aparece aqui por
+  falta de diversidade real entre os candidatos do front.
 ## Infraestrutura / publicação
 
 - [ ] **Publicar no PyPI** — hoje só instala via clone + `pip install -e .`.
@@ -305,6 +325,48 @@ extensões para priorizar depois.
   exploratória) antes de submeter -- confirmar que não há outro trabalho
   cobrindo exatamente a combinação (Fuzzy-OPF + comparação de
   metaheurísticas + NSGA-II) antes de reivindicar ineditismo no artigo.
+
+## Sugestões de revisão externa (2026-09-20, análise de lista de melhorias)
+
+Registrado a partir de uma lista de sugestões de melhoria pro artigo,
+organizadas do mais simples pro mais complicado (ordem de implementação
+sugerida). Ver conversa de 2026-09-20 para a análise completa de
+"já feito / acionável / fora de alcance" por item.
+
+- [ ] **1. Teste de Wilcoxon pareado** (mais simples, mais barato) --
+  calcular sobre os resultados que já temos (20 runs por dataset, mesmos
+  splits para OPF e Fuzzy-OPF) para dar significância estatística formal
+  às comparações, além de só "média ± desvio padrão". Não precisa
+  retreinar nada, é só estatística sobre os CSVs já salvos.
+- [ ] **2. AUC-ROC** -- métrica adicional para datasets desbalanceados
+  (Thyroid especialmente), complementando a matriz de confusão que já
+  fizemos. Barato, não precisa retreinar.
+- [ ] **3. Baselines externos** (SVM com kernel RBF, Random Forest,
+  XGBoost/LightGBM, k-NN fuzzy) -- hoje só comparamos Fuzzy-OPF vs. OPF
+  padrão; nunca comparamos contra classificadores fora da família OPF.
+  Mais trabalhoso (treinar modelos novos via scikit-learn nos datasets já
+  validados), mas alto retorno para o artigo.
+- [ ] **4. Teste de Friedman + post-hoc Nemenyi** -- depende do item 3
+  (precisa de 3+ classificadores para fazer sentido; com só Fuzzy-OPF vs.
+  OPF, Wilcoxon já basta).
+- [ ] **5. Pertinência via Fuzzy C-Means (FCM) ou Gaussiana real** --
+  diferente do que já fizemos (`membership_kind` muda só o *mapeamento*
+  densidade->pertinência, Eq. 5); isso mudaria o *cálculo da densidade em
+  si*. Extensão genuína, mais envolvida que o item de pertinência já
+  fechado.
+- [ ] **6. Formalizar teoricamente a quebra da propriedade "smooth" da
+  função de custo** -- já temos evidência empírica/mecanística forte
+  disso (o bug do ciclo infinito no heap, corrigido com a guarda
+  `BLACK`), mas falta escrever a análise formal de sob quais condições
+  matemáticas exatas a garantia de otimalidade global do OPF se mantém ou
+  se perde com o produto `F_Theta(u) * max{C(q), d(q,u)}`. Isso é
+  trabalho de redação/prova, não de código.
+- [ ] **7. Subamostragem/aproximação de densidade (KD-trees, vizinhos
+  aproximados)** para escalar o clustering em datasets maiores que o
+  Thyroid (mais complicado, mais especulativo) -- complementa o que já
+  fizemos (cache compartilhado, paralelismo, achado de que k_max pequeno
+  já basta no Thyroid), mas ataca o problema por outro ângulo (reduzir o
+  n em vez de reduzir k).
 
 ## Itens menores
 
