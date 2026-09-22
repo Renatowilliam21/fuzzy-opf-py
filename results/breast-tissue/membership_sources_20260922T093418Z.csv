@@ -1,0 +1,3 @@
+membership_source,k_max,sigma,test_accuracy,fit_seconds
+density,20,0.6,0.7677,0.4
+fcm,20,0.6,0.7677,0.1

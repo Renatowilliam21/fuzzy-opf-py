@@ -1,0 +1,8 @@
+dataset: data/raw/thyroid.txt
+seed: 0
+k_max: 20
+sigma: 1.15
+search_best_k: false
+membership_side: target
+membership_kind: quadratic
+normalize: true

@@ -514,11 +514,51 @@ sugerida). Ver conversa de 2026-09-20 para a análise completa de
   literatura geralmente recomenda 10+); rodar Four-Class e/ou Landsat
   (fora do escopo por decisão do usuário, ver histórico) teria dado mais
   poder, mas não foi perseguido.
-- [ ] **5. Pertinência via Fuzzy C-Means (FCM) ou Gaussiana real** --
-  diferente do que já fizemos (`membership_kind` muda só o *mapeamento*
-  densidade->pertinência, Eq. 5); isso mudaria o *cálculo da densidade em
-  si*. Extensão genuína, mais envolvida que o item de pertinência já
-  fechado.
+- [x] **5. Pertinência via Fuzzy C-Means (FCM)** -- **implementado e
+  testado**. `membership_source` (`"density"`, padrão, Eq. 3 original;
+  `"fcm"`, clustering FCM nas features cruas via `scikit-fuzzy`) em
+  `FuzzyOPF` -- diferente do `membership_kind` (que só muda a curva de
+  mapeamento): isso muda o que está sendo medido, não só como é mapeado
+  para [sigma, 1]. Pertinência FCM = grau de pertinência máximo de cada
+  amostra ao seu próprio cluster (dentre `fcm_n_clusters`, padrão = número
+  de classes), normalizado e passado pela mesma curva de
+  `membership_kind` (reuso de código via `_apply_membership_curve`, sem
+  duplicar a lógica das 4 formas). Ambas as fontes satisfazem as mesmas
+  condições de contorno (teste formal). Script
+  `compare_membership_sources.py` + configs para os 8 datasets prontos.
+  30 testes passando.
+
+  **Testado nos 8 datasets validados** (mesmo sigma fixo por dataset já
+  usado nos testes de baseline):
+
+  | Dataset | Density | FCM | Diferença |
+  |---|---|---|---|
+  | Boat | 0.9688 | 0.9688 | 0.0000 |
+  | Cone-Torus | 0.8668 | 0.8668 | 0.0000 |
+  | Data1 | 0.9969 | 0.9969 | 0.0000 |
+  | Data2 | 0.9444 | 0.9566 | +0.0122 |
+  | Data3 | 0.9732 | 0.9732 | 0.0000 |
+  | Breast Tissue | 0.7677 | 0.7677 | 0.0000 |
+  | MPEG-7 BAS | 0.9165 | 0.9165 | 0.0000 |
+  | Thyroid | 0.7543 | 0.7575 | +0.0032 |
+
+  **Conclusão**: empate exato em 6 de 8 datasets -- confirma, de um ângulo
+  diferente, o mesmo padrão já visto com `membership_kind`: uma vez que
+  `sigma` está bem ajustado, a fonte de pertinência (densidade vs. FCM)
+  quase não importa. A hipótese de que o FCM ajudaria especificamente no
+  Thyroid (por captar melhor a estrutura de classes que a densidade,
+  distorcida pelo desbalanceamento) **não se confirmou** -- diferença de
+  só +0.0032, dentro do ruído. Única exceção com diferença real é o Data2
+  (+0.0122), pequena demais para mudar a conclusão geral. Reforça:
+  **sigma domina o comportamento do Fuzzy-OPF; as escolhas estruturais de
+  como calcular/mapear pertinência são, na prática, secundárias** -- um
+  achado consistente que já apareceu de duas formas independentes
+  (`membership_kind` e `membership_source`) nessa investigação.
+
+  **Gaussiana real**: não implementada (escopo do item ficou em FCM, que
+  já é uma mudança estrutural suficiente para o objetivo de "pertinência
+  calculada de forma diferente, não só mapeada diferente"); pode ser um
+  item futuro separado se quiser mais uma fonte de comparação.
 - [ ] **6. Formalizar teoricamente a quebra da propriedade "smooth" da
   função de custo** -- já temos evidência empírica/mecanística forte
   disso (o bug do ciclo infinito no heap, corrigido com a guarda

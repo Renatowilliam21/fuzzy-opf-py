@@ -1,0 +1,7 @@
+dataset: data/raw/cone-torus.dat
+seed: 0
+k_max: 20
+sigma: 0.9
+search_best_k: false
+membership_side: target
+membership_kind: quadratic
