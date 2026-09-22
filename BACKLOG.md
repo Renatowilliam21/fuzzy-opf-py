@@ -559,13 +559,40 @@ sugerida). Ver conversa de 2026-09-20 para a análise completa de
   já é uma mudança estrutural suficiente para o objetivo de "pertinência
   calculada de forma diferente, não só mapeada diferente"); pode ser um
   item futuro separado se quiser mais uma fonte de comparação.
-- [ ] **6. Formalizar teoricamente a quebra da propriedade "smooth" da
-  função de custo** -- já temos evidência empírica/mecanística forte
-  disso (o bug do ciclo infinito no heap, corrigido com a guarda
-  `BLACK`), mas falta escrever a análise formal de sob quais condições
-  matemáticas exatas a garantia de otimalidade global do OPF se mantém ou
-  se perde com o produto `F_Theta(u) * max{C(q), d(q,u)}`. Isso é
-  trabalho de redação/prova, não de código.
+- [x] **6. Formalizar teoricamente a quebra da propriedade "smooth" da
+  função de custo** -- **concluído**. Prova formal em
+  `docs/smoothness_proof.tex`, ancorada exatamente na implementação real
+  (`current_cost = membership * max(heap.cost[p], weight)`, convenção
+  "target"). Resultados provados:
+  - **Teorema principal**: para `sigma < 1`, a função de custo fuzzy NÃO
+    é smooth em geral -- identifica a condição exata de quebra:
+    `w(t,u) <= f'(caminho)` E `F_Theta(u) < 1` simultaneamente (comum na
+    prática, justamente para as amostras mais "típicas"/de alta
+    densidade).
+  - **Corolário**: em `sigma = 1`, a suavidade é recuperada exatamente --
+    justificativa formal (não só numérica) de por que o artigo afirma que
+    Fuzzy-OPF degenera pro OPF padrão nesse ponto.
+  - **Consequência algorítmica**: a guarda `BLACK` (que corrigimos no bug
+    do ciclo infinito) é *necessária* no Fuzzy-OPF, nunca redundante como
+    no OPF padrão -- conecta a prova formal diretamente ao bug real que
+    encontramos e corrigimos.
+  - **Ressalva importante de honestidade científica**: com a guarda
+    restaurada, o algoritmo termina e produz uma floresta válida (sem
+    ciclos), mas isso NÃO restaura a garantia clássica de otimalidade
+    global ao estilo Dijkstra -- vira uma heurística gulosa bem definida
+    sobre o grafo ponderado por fuzzy, não um algoritmo com a mesma
+    garantia teórica do OPF padrão. Distinção importante para não
+    superestimar o que foi provado.
+  - **Discussão conectando com achado empírico anterior**: a perda de
+    suavidade oferece uma explicação teórica plausível (não provada como
+    causa única) para a multimodalidade do espaço de busca de `sigma` que
+    encontramos empiricamente no Thyroid -- uma boa unificação entre teoria
+    e experimento pro artigo.
+  - **Nota sobre `membership_side`**: a mesma condição de quebra vale para
+    a convenção "source" (troca só qual nó entra na fórmula) -- as duas
+    convenções são igualmente não-suaves; a diferença empírica entre elas
+    está em qual caminho o processo não-suave acaba preferindo, não em se
+    a suavidade se mantém.
 - [ ] **7. Subamostragem/aproximação de densidade (KD-trees, vizinhos
   aproximados)** para escalar o clustering em datasets maiores que o
   Thyroid (mais complicado, mais especulativo) -- complementa o que já

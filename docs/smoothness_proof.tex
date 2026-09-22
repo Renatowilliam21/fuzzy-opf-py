@@ -1,0 +1,69 @@
+\section{On the Loss of the Smooth Path-Cost Property under Fuzzy Weighting}
+\label{sec:smoothness-proof}
+
+\subsection{Background: smoothness in standard OPF}
+
+The correctness and efficiency of the standard Optimum-Path Forest classifier rest on a well-known property of its path-cost function, referred to in the OPF literature as \emph{smoothness}. Let $\pi = \langle s, \dots, t \rangle$ denote a path in the training graph and let $f(\pi)$ denote its cost under the minimax formulation
+\[
+f(\langle s \rangle) = 0, \qquad
+f(\pi \cdot \langle t, u \rangle) = \max\{\, f(\pi),\; d(t, u) \,\},
+\]
+where $d(t,u)$ is the distance (arc weight) between the last node of $\pi$ and the candidate node $u$. A path-cost function is smooth when extending a path can never decrease its cost, that is,
+\[
+f(\pi \cdot \langle t, u \rangle) \;\ge\; f(\pi) \qquad \text{for every extension } \langle t, u \rangle. \tag{S}
+\]
+For the standard, unweighted minimax cost above, (S) holds trivially, since $\max\{f(\pi), d(t,u)\} \ge f(\pi)$ regardless of $d(t,u)$. This is precisely what licenses the greedy, Dijkstra-style argument underlying OPF: once a node $q$ is removed from the priority queue with the smallest tentative cost among all unvisited nodes, no later relaxation through any not-yet-visited node $p$ can produce a smaller cost for $q$, because any such path would have to be extended through an arc, and (S) guarantees the extension cannot lower the cost below what has already been achieved. Consequently, a finalized (black) node never needs to be revisited: the check ``is $q$ already black'' is provably redundant, and standard implementations (including \texttt{opfython}'s \texttt{SupervisedOPF}) omit it.
+
+\subsection{The fuzzy-weighted cost function}
+
+Fuzzy-OPF (Eq.~6 of the original formulation, and Algorithm~3 of this port) modifies the cost update by multiplying the minimax term by a membership degree $F_\Theta \in [\sigma, 1]$, $\sigma \in (0, 1.5]$:
+\[
+f'(\pi \cdot \langle t, u \rangle) \;=\; F_\Theta(u) \cdot \max\{\, f'(\pi),\; d(t,u) \,\}, \tag{6}
+\]
+using the ``target'' convention (membership of the candidate node $u$ being conquered), which is the convention this project validated empirically as the one that reproduces the paper's reported Fuzzy-OPF~$\ge$~OPF behaviour (see the \texttt{membership\_side} investigation). This is exactly the update implemented in \texttt{FuzzyOPF.\_grow\_fuzzy\_minimax\_forest}:
+\begin{quote}
+\texttt{current\_cost = membership * max(heap.cost[p], weight)}
+\end{quote}
+where \texttt{membership} is $F_\Theta(u)$, \texttt{heap.cost[p]} is $f'(\pi)$, and \texttt{weight} is $d(t,u)$.
+
+\subsection{Smoothness fails in general}
+
+\textbf{Claim.} For $\sigma < 1$, the fuzzy cost function $f'$ is \emph{not} smooth in general.
+
+\textbf{Proof.} Fix a path $\pi$ with cost $C' = f'(\pi)$, and a candidate extension through node $u$ with weight $w = d(t,u)$. By (6),
+\[
+f'(\pi \cdot \langle t,u \rangle) = F_\Theta(u) \cdot \max\{C', w\}.
+\]
+Consider the case $w \le C'$, so that $\max\{C', w\} = C'$. Then
+\[
+f'(\pi \cdot \langle t,u \rangle) = F_\Theta(u) \cdot C'.
+\]
+Since $F_\Theta(u) \in [\sigma, 1]$, whenever $F_\Theta(u) < 1$ (which occurs for any $u$ that is not maximally ``typical'', i.e., any $u$ whose density $\rho(u)$ is strictly below $\rho_{\max}$, unless $\sigma = 1$) we have
+\[
+f'(\pi \cdot \langle t,u \rangle) = F_\Theta(u) \cdot C' \;<\; C' = f'(\pi),
+\]
+which violates (S). $\blacksquare$
+
+\textbf{Exact breaking condition.} The proof identifies precisely when smoothness fails: whenever the extending arc's weight does not exceed the current path cost ($w \le C' = f'(\pi)$) \emph{and} the conquering candidate's membership is strictly below~1 ($F_\Theta(u) < \sigma \le 1$, i.e., $u$ is not the most typical sample). Both conditions are common in practice, particularly for nodes with high local density that most fully belong to their own class; these are exactly the ``easy'', typical samples one would intuitively expect to be finalized early and cheaply, yet it is precisely this population for which the fuzzy weighting can produce cost \emph{reductions}.
+
+\subsection{The degenerate case $\sigma = 1$}
+
+\textbf{Corollary.} When $\sigma = 1$, smoothness is recovered.
+
+\textbf{Proof.} By Eq.~5 (the membership function), $\sigma = 1$ forces $F_\Theta(x) = 1$ for every sample $x$, independent of density. Substituting into (6) gives $f'(\pi \cdot \langle t,u\rangle) = \max\{f'(\pi), w\} \ge f'(\pi)$, which is exactly (S). $\blacksquare$
+
+This is the formal justification for the paper's own remark that Fuzzy-OPF degenerates to standard OPF at $\sigma = 1$: it is not merely that the weighting factor becomes numerically inert, but specifically that the algorithm recovers the theoretical property (smoothness) that the entire classical optimality argument depends on.
+
+\subsection{Practical and algorithmic consequence}
+
+Because smoothness fails for $\sigma < 1$, the ``already finalized'' (black) check that standard OPF safely omits becomes \emph{necessary} in Fuzzy-OPF. Without it, a node $q$ already removed from the queue (and hence already assigned a predecessor, a predicted label, and treated as settled) can later be reached by a cheaper fuzzy-weighted path through a node $p$ processed afterwards, causing \texttt{neighbour.pred} to be overwritten. Structurally, this can introduce a cycle into the predecessor graph, since $q$'s predecessor may be reassigned to a node $p$ that was itself, transitively, conquered through $q$ earlier; any subsequent traversal that follows \texttt{pred} pointers (such as \texttt{mark\_nodes} or \texttt{prune}) then loops indefinitely. This is precisely the failure mode this project encountered and fixed by restoring the \texttt{heap.color[q] != BLACK} guard, matching the original C \texttt{fuzzy.c} implementation; Section~[BACKLOG.md, bug \#1] documents the empirical manifestation (an infinite loop during pruning).
+
+With the guard restored, the algorithm is well-defined and terminates, producing a valid spanning forest free of cycles. It is important, however, not to overstate what this guarantees: the guard enforces a particular, greedy resolution policy (a node's cost and predecessor, once finalized, are never revisited, matching the original C implementation's first-in-first-out convention for tie and near-tie resolution) rather than restoring a proof of global optimality. Because the classical Dijkstra-style argument for OPF's optimality depends on smoothness precisely to justify that a finalized node's cost cannot later be improved, and that premise no longer holds for $\sigma < 1$, the corrected Fuzzy-OPF should be understood as a well-defined, terminating, greedy heuristic over the fuzzy-weighted graph, rather than as an algorithm with the same global-optimality guarantee as standard OPF. This distinction does not affect correctness of implementation (the corrected algorithm faithfully reproduces the original C reference behaviour), but it is the precise theoretical reason such a guarantee cannot be claimed for $\sigma < 1$.
+
+\subsection{Discussion: a plausible link to the empirically observed multimodality}
+
+This project's experimental investigation (Section~[sigma sweep, Thyroid]) found that the validation-accuracy landscape over $\sigma$ is multimodal for at least one dataset (Thyroid), with two accuracy plateaus separated by a valley, rather than the single wide plateau observed on the other datasets tested. The loss of smoothness for $\sigma < 1$ offers a plausible, though not proven, theoretical account for why such non-convex landscapes can arise: since the competition process no longer enjoys a monotonicity guarantee, small changes in $\sigma$ can, in principle, alter which candidate wins a given node's ``territory'' in ways that do not vary smoothly with $\sigma$, particularly in regions of the feature space with many samples of only moderate typicality (which is exactly the regime identified above as breaking (S)). We present this as a candidate explanation consistent with the theory, not as a proof that smoothness loss is the sole or dominant cause of the observed multimodality, which may also reflect genuine class-boundary structure in the Thyroid feature space.
+
+\subsection{Effect of the membership convention (\texttt{membership\_side})}
+
+The analysis above uses the ``target'' convention, $F_\Theta(u)$, i.e. the membership of the node being conquered. Under the alternative ``source'' convention (multiplying by $F_\Theta(t)$, the membership of the already-expanded node), the same breaking condition applies with $F_\Theta(t)$ in place of $F_\Theta(u)$: smoothness still fails whenever $w \le C'$ and $F_\Theta(t) < 1$. Both conventions are therefore equally non-smooth for $\sigma < 1$; the empirical difference this project found between them (only the ``target'' convention reproduces the paper's Fuzzy-OPF~$\ge$~OPF property on Cone-Torus, whereas ``source'' collapses to parity with standard OPF, see the \texttt{membership\_side} investigation) is a difference in \emph{which} paths end up preferred by the resulting non-smooth process, not a difference in whether smoothness holds.
