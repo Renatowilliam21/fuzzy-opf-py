@@ -4,6 +4,14 @@ pairs differ?) -- the standard non-parametric methodology (Demsar 2006)
 for comparing multiple classifiers across multiple datasets, using each
 dataset's mean accuracy per method as one "block".
 
+Uses Statys (https://github.com/gugarosa/statys) instead of a hand-rolled
+scipy/scikit-posthocs implementation -- from the same author/group behind
+opfython and opytimizer, already used throughout this project, so this
+keeps the statistical tooling consistent with the rest of the toolchain.
+Statys also gives a real critical-difference diagram (plot_critical_difference,
+the standard Demsar-style figure), which our first hand-rolled version
+didn't produce.
+
 Builds directly on compare_baselines.py's output CSVs (one row per
 run/method, already opf_accuracy-corrected -- see BACKLOG.md) -- takes the
 mean accuracy per method per dataset as input, exactly the summary table
@@ -24,12 +32,12 @@ from __future__ import annotations
 import argparse
 import csv
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
 import yaml
-from scipy.stats import friedmanchisquare
+from statys import friedman, nemenyi, plot_critical_difference
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -62,50 +70,41 @@ def run(config_path: str) -> None:
     for d, row in zip(datasets, matrix):
         print(d.ljust(16) + "".join(f"{v:.4f}".ljust(16) for v in row))
 
-    # Average ranks (Demsar-style; rank 1 = best per dataset, i.e. highest
-    # accuracy). pandas' rank() on the negated row gives rank 1 to the
-    # largest original value.
-    ranks = np.array([pd.Series(-row).rank(ascending=True).values for row in matrix])
-    avg_ranks = ranks.mean(axis=0)
+    # Friedman test (Statys): rows = blocks (datasets), columns = treatments
+    # (methods). Returns ((chi_square, df), (F, (df1, df2))) -- the F
+    # statistic is the Iman-Davenport correction, generally preferred over
+    # the chi-square form for small numbers of treatments/blocks.
+    (chi_square, df), (f_stat, (df1, df2)) = friedman(matrix)
+    print(f"\nFriedman (Statys): chi-square={chi_square:.4f} (df={df})  "
+          f"Iman-Davenport F={f_stat:.4f} (df1={df1}, df2={df2})")
 
-    print("\nAverage ranks (1 = best):")
+    # Statys ranks SMALLER values as rank 1 by default; for accuracy
+    # (higher is better), negate the matrix so the highest accuracy gets
+    # rank 1, per the library's own documented convention.
+    ranks, critical_difference = nemenyi(-matrix, alpha=0.05)
+    avg_ranks = ranks.mean(axis=0) if ranks.ndim == 2 else ranks
+
+    print(f"\nAverage ranks (1 = best), critical difference = {critical_difference:.4f}:")
     for m, r in sorted(zip(methods, avg_ranks), key=lambda x: x[1]):
         print(f"  {m}: {r:.2f}")
 
-    # Friedman test: are the methods' accuracies (columns) significantly
-    # different across datasets (blocks/rows)?
-    stat, p = friedmanchisquare(*[matrix[:, i] for i in range(len(methods))])
-    print(f"\nFriedman test: statistic={stat:.4f}  p={p:.4f}  "
-          f"{'(significant at alpha=0.05)' if p < 0.05 else '(NOT significant at alpha=0.05)'}")
-
-    if p >= 0.05:
-        print("\nFriedman not significant -- post-hoc Nemenyi is not warranted "
-              "(no evidence the methods differ overall); skipping.")
-        return
-
-    try:
-        import scikit_posthocs as sp
-    except ImportError:
-        print("\nscikit-posthocs not installed -- run: pip install scikit-posthocs")
-        return
-
-    nemenyi = sp.posthoc_nemenyi_friedman(matrix)
-    nemenyi.columns = methods
-    nemenyi.index = methods
-
-    print("\nNemenyi post-hoc pairwise p-values:")
-    print(nemenyi.round(4).to_string())
-
-    print("\nSignificant pairs (p < 0.05):")
+    print("\nPairs differing by more than the critical difference (significant):")
     found_any = False
     for i, m1 in enumerate(methods):
         for j, m2 in enumerate(methods):
-            if i < j and nemenyi.iloc[i, j] < 0.05:
-                print(f"  {m1} vs {m2}: p={nemenyi.iloc[i, j]:.4f}")
+            if i < j and abs(avg_ranks[i] - avg_ranks[j]) > critical_difference:
+                print(f"  {m1} vs {m2}: |rank diff|={abs(avg_ranks[i] - avg_ranks[j]):.2f} > CD={critical_difference:.2f}")
                 found_any = True
     if not found_any:
-        print("  (none -- Friedman found an overall difference, but no individual "
-              "pair reaches significance at alpha=0.05 with this sample size)")
+        print(f"  (none -- every pair's rank difference is within the critical difference of {critical_difference:.2f})")
+
+    out_dir = REPO_ROOT / "results" / "friedman_nemenyi"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    fig_path = out_dir / f"critical_difference_{timestamp}.pdf"
+
+    plot_critical_difference(avg_ranks, critical_difference, labels=methods, output=str(fig_path))
+    print(f"\nCritical difference diagram saved to: {fig_path}")
 
 
 if __name__ == "__main__":

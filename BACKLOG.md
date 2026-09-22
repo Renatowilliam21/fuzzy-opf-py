@@ -514,6 +514,20 @@ sugerida). Ver conversa de 2026-09-20 para a análise completa de
   literatura geralmente recomenda 10+); rodar Four-Class e/ou Landsat
   (fora do escopo por decisão do usuário, ver histórico) teria dado mais
   poder, mas não foi perseguido.
+
+  **Atualização (2026-09-22)**: migrado de `scipy`/`scikit-posthocs`
+  (implementação manual) para `Statys`
+  (https://github.com/gugarosa/statys), biblioteca do mesmo
+  autor/grupo por trás da `opfython`/`opytimizer` já usadas no projeto --
+  mantém consistência metodológica com o resto do toolchain. Resultado
+  numérico idêntico (chi-quadrado=8.70), mais o F de Iman-Davenport
+  (2.61, frequentemente preferido sobre o qui-quadrado nesse tipo de
+  comparação) e, principalmente, um **diagrama de diferença crítica**
+  real (`plot_critical_difference`, o gráfico padrão da literatura
+  Demšar 2006) que a versão manual não gerava -- confirma visualmente
+  que os 5 métodos ficam conectados por uma única barra (nenhum par
+  difere significativamente), consistente com o Friedman não
+  significativo.
 - [x] **5. Pertinência via Fuzzy C-Means (FCM)** -- **implementado e
   testado**. `membership_source` (`"density"`, padrão, Eq. 3 original;
   `"fcm"`, clustering FCM nas features cruas via `scikit-fuzzy`) em
