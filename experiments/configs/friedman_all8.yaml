@@ -1,0 +1,9 @@
+datasets:
+  boat: results/boat/baselines_20260922T013658Z.csv
+  cone-torus: results/cone-torus/baselines_20260922T013813Z.csv
+  data1: results/data1/baselines_20260922T014128Z.csv
+  data2: results/data2/baselines_20260922T080846Z.csv
+  data3: results/data3/baselines_20260922T014234Z.csv
+  mpeg7_BAS: results/mpeg7_BAS/baselines_20260922T005622Z.csv
+  breast-tissue: results/breast-tissue/baselines_20260922T014335Z.csv
+  thyroid: results/thyroid/baselines_20260921T232903Z.csv

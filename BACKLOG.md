@@ -475,9 +475,45 @@ sugerida). Ver conversa de 2026-09-20 para a análise completa de
   outros 7 datasets (Boat, Cone-Torus, Data1/2/3, Breast Tissue, MPEG-7
   BAS) -- o resultado inicial (métrica errada) foi descartado para todos,
   não só o Thyroid.
-- [ ] **4. Teste de Friedman + post-hoc Nemenyi** -- depende do item 3
-  (precisa de 3+ classificadores para fazer sentido; com só Fuzzy-OPF vs.
-  OPF, Wilcoxon já basta).
+- [x] **4. Teste de Friedman + post-hoc Nemenyi** -- **implementado e
+  concluído**. `friedman_nemenyi_test.py` (`scipy.stats.friedmanchisquare`
+  + `scikit_posthocs.posthoc_nemenyi_friedman`) comparando os 5 métodos
+  (Fuzzy-OPF, SVM-RBF, Random Forest, k-NN, XGBoost) nos 8 datasets
+  validados, usando a acurácia média de cada um (mesma correção de métrica
+  do item 3, `opf_accuracy` uniforme).
+
+  **Matriz de acurácia média (8 datasets x 5 métodos)**:
+
+  | Dataset | Fuzzy-OPF | k-NN | Random Forest | SVM-RBF | XGBoost |
+  |---|---|---|---|---|---|
+  | Boat | 0.9894 | 0.9660 | 0.9672 | 0.9923 | 0.9244 |
+  | Breast Tissue | 0.6980 | 0.6992 | 0.7925 | 0.7467 | 0.7944 |
+  | Cone-Torus | 0.8520 | 0.8677 | 0.8574 | 0.8714 | 0.8384 |
+  | Data1 | 0.9933 | 0.9931 | 0.9907 | 0.9934 | 0.9890 |
+  | Data2 | 0.9590 | 0.9827 | 0.9816 | 0.9764 | 0.9793 |
+  | Data3 | 0.9924 | 0.9904 | 0.9945 | 0.9944 | 0.9836 |
+  | MPEG-7 BAS | 0.9043 | 0.8844 | 0.9046 | 0.9111 | 0.8567 |
+  | Thyroid | 0.7477 | 0.7101 | 0.9883 | 0.8921 | 0.9877 |
+
+  **Ranks médios** (1=melhor): SVM-RBF 2.00, Random Forest 2.25, k-NN
+  3.38, **Fuzzy-OPF 3.50**, XGBoost 3.88.
+
+  **Friedman: statistic=8.70, p=0.0691 -- NÃO significativo a α=0.05**
+  (por pouco). Post-hoc Nemenyi não se aplica (Friedman não rejeitou a
+  hipótese nula de igualdade entre os métodos).
+
+  **Conclusão honesta para o artigo**: com 8 datasets, não há evidência
+  estatística suficiente pra afirmar que os 5 métodos diferem de forma
+  geral -- resultado limítrofe (p=0.069, perto de 0.05), não uma vitória
+  clara de ninguém. Isso é consistente com o padrão observado
+  dataset-a-dataset: Fuzzy-OPF vence/empata em datasets balanceados
+  (Boat, Data1, MPEG-7 BAS) mas perde feio em desbalanceados/pequenos
+  (Thyroid, Breast Tissue) -- a média dos ranks "esconde" essa
+  variabilidade real entre datasets. Nota metodológica para o artigo: N=8
+  datasets é pequeno para o Friedman ter bom poder estatístico (a
+  literatura geralmente recomenda 10+); rodar Four-Class e/ou Landsat
+  (fora do escopo por decisão do usuário, ver histórico) teria dado mais
+  poder, mas não foi perseguido.
 - [ ] **5. Pertinência via Fuzzy C-Means (FCM) ou Gaussiana real** --
   diferente do que já fizemos (`membership_kind` muda só o *mapeamento*
   densidade->pertinência, Eq. 5); isso mudaria o *cálculo da densidade em

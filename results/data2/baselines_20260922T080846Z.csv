@@ -1,0 +1,101 @@
+run,method,test_accuracy,fit_seconds,best_params
+0,fuzzy-opf,0.9444,0.8,-
+0,svm_rbf,0.9444,2.0,{'C': 10; 'gamma': 0.01; 'kernel': 'rbf'}
+0,random_forest,0.9878,1.5,{'max_depth': 20; 'n_estimators': 100}
+0,knn,0.9566,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+0,xgboost,0.9634,0.3,{'learning_rate': 0.1; 'max_depth': 3; 'n_estimators': 200}
+1,fuzzy-opf,1.0000,0.5,-
+1,svm_rbf,0.9792,0.1,{'C': 0.1; 'gamma': 0.001; 'kernel': 'rbf'}
+1,random_forest,1.0000,1.5,{'max_depth': None; 'n_estimators': 100}
+1,knn,1.0000,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+1,xgboost,0.9792,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+2,fuzzy-opf,1.0000,0.5,-
+2,svm_rbf,0.9667,0.1,{'C': 0.1; 'gamma': 'scale'; 'kernel': 'rbf'}
+2,random_forest,1.0000,1.4,{'max_depth': None; 'n_estimators': 100}
+2,knn,1.0000,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+2,xgboost,1.0000,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 200}
+3,fuzzy-opf,1.0000,0.5,-
+3,svm_rbf,0.9828,0.1,{'C': 100; 'gamma': 'scale'; 'kernel': 'rbf'}
+3,random_forest,0.9828,1.4,{'max_depth': 20; 'n_estimators': 100}
+3,knn,1.0000,0.0,{'n_neighbors': 5; 'weights': 'distance'}
+3,xgboost,0.9828,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 200}
+4,fuzzy-opf,0.9833,0.5,-
+4,svm_rbf,0.9833,0.1,{'C': 1; 'gamma': 'scale'; 'kernel': 'rbf'}
+4,random_forest,0.9833,1.4,{'max_depth': None; 'n_estimators': 100}
+4,knn,0.9833,0.0,{'n_neighbors': 5; 'weights': 'distance'}
+4,xgboost,0.9833,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+5,fuzzy-opf,1.0000,0.5,-
+5,svm_rbf,1.0000,0.1,{'C': 10; 'gamma': 0.01; 'kernel': 'rbf'}
+5,random_forest,1.0000,1.4,{'max_depth': 20; 'n_estimators': 100}
+5,knn,1.0000,0.0,{'n_neighbors': 9; 'weights': 'distance'}
+5,xgboost,1.0000,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+6,fuzzy-opf,0.9857,0.5,-
+6,svm_rbf,0.9630,0.1,{'C': 1; 'gamma': 'scale'; 'kernel': 'rbf'}
+6,random_forest,0.9857,1.4,{'max_depth': None; 'n_estimators': 100}
+6,knn,0.9630,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+6,xgboost,0.9857,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+7,fuzzy-opf,0.9828,0.5,-
+7,svm_rbf,0.9828,0.1,{'C': 1; 'gamma': 0.01; 'kernel': 'rbf'}
+7,random_forest,0.9828,1.5,{'max_depth': None; 'n_estimators': 100}
+7,knn,0.9828,0.1,{'n_neighbors': 5; 'weights': 'distance'}
+7,xgboost,0.9828,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+8,fuzzy-opf,0.9844,0.5,-
+8,svm_rbf,1.0000,0.1,{'C': 1; 'gamma': 0.01; 'kernel': 'rbf'}
+8,random_forest,1.0000,1.5,{'max_depth': 20; 'n_estimators': 100}
+8,knn,1.0000,0.0,{'n_neighbors': 5; 'weights': 'distance'}
+8,xgboost,1.0000,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+9,fuzzy-opf,0.9677,0.5,-
+9,svm_rbf,0.9808,0.1,{'C': 1; 'gamma': 'scale'; 'kernel': 'rbf'}
+9,random_forest,0.9808,1.4,{'max_depth': None; 'n_estimators': 100}
+9,knn,1.0000,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+9,xgboost,0.9808,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+10,fuzzy-opf,0.9649,0.5,-
+10,svm_rbf,0.9821,0.1,{'C': 100; 'gamma': 0.001; 'kernel': 'rbf'}
+10,random_forest,0.9821,1.6,{'max_depth': None; 'n_estimators': 200}
+10,knn,1.0000,0.1,{'n_neighbors': 5; 'weights': 'distance'}
+10,xgboost,0.9821,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+11,fuzzy-opf,0.9792,0.5,-
+11,svm_rbf,0.9375,0.1,{'C': 1; 'gamma': 0.001; 'kernel': 'rbf'}
+11,random_forest,0.9375,1.4,{'max_depth': 10; 'n_estimators': 100}
+11,knn,0.9583,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+11,xgboost,0.9375,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+12,fuzzy-opf,0.9821,0.5,-
+12,svm_rbf,0.9821,0.1,{'C': 1; 'gamma': 0.01; 'kernel': 'rbf'}
+12,random_forest,0.9821,1.6,{'max_depth': None; 'n_estimators': 200}
+12,knn,0.9821,0.1,{'n_neighbors': 3; 'weights': 'distance'}
+12,xgboost,0.9821,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+13,fuzzy-opf,0.5370,0.5,-
+13,svm_rbf,0.9648,0.1,{'C': 1; 'gamma': 0.01; 'kernel': 'rbf'}
+13,random_forest,0.9648,1.4,{'max_depth': None; 'n_estimators': 100}
+13,knn,0.9648,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+13,xgboost,0.9833,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+14,fuzzy-opf,1.0000,0.5,-
+14,svm_rbf,1.0000,0.1,{'C': 1; 'gamma': 'scale'; 'kernel': 'rbf'}
+14,random_forest,1.0000,1.5,{'max_depth': 10; 'n_estimators': 100}
+14,knn,1.0000,0.0,{'n_neighbors': 5; 'weights': 'distance'}
+14,xgboost,1.0000,0.2,{'learning_rate': 0.1; 'max_depth': 3; 'n_estimators': 200}
+15,fuzzy-opf,0.9644,0.5,-
+15,svm_rbf,0.9644,0.1,{'C': 1; 'gamma': 0.01; 'kernel': 'rbf'}
+15,random_forest,0.9644,1.4,{'max_depth': None; 'n_estimators': 100}
+15,knn,0.9644,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+15,xgboost,0.9644,0.3,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+16,fuzzy-opf,0.9828,0.5,-
+16,svm_rbf,1.0000,0.1,{'C': 10; 'gamma': 'scale'; 'kernel': 'rbf'}
+16,random_forest,1.0000,1.4,{'max_depth': None; 'n_estimators': 100}
+16,knn,1.0000,0.0,{'n_neighbors': 15; 'weights': 'distance'}
+16,xgboost,1.0000,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 200}
+17,fuzzy-opf,0.9219,0.5,-
+17,svm_rbf,0.9375,0.1,{'C': 0.1; 'gamma': 0.001; 'kernel': 'rbf'}
+17,random_forest,0.9219,1.4,{'max_depth': None; 'n_estimators': 100}
+17,knn,0.9219,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+17,xgboost,0.9219,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+18,fuzzy-opf,1.0000,0.5,-
+18,svm_rbf,1.0000,0.1,{'C': 1; 'gamma': 'scale'; 'kernel': 'rbf'}
+18,random_forest,1.0000,1.5,{'max_depth': 10; 'n_estimators': 100}
+18,knn,1.0000,0.0,{'n_neighbors': 7; 'weights': 'distance'}
+18,xgboost,0.9800,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
+19,fuzzy-opf,1.0000,0.5,-
+19,svm_rbf,0.9762,0.1,{'C': 1; 'gamma': 0.001; 'kernel': 'rbf'}
+19,random_forest,0.9762,1.4,{'max_depth': None; 'n_estimators': 100}
+19,knn,0.9762,0.0,{'n_neighbors': 3; 'weights': 'distance'}
+19,xgboost,0.9762,0.2,{'learning_rate': 0.05; 'max_depth': 3; 'n_estimators': 100}
