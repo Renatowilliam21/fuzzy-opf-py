@@ -413,11 +413,68 @@ sugerida). Ver conversa de 2026-09-20 para a análise completa de
   leitura madura já estabelecida pelo Wilcoxon (sem balanceamento, os dois
   são essencialmente equivalentes no Thyroid, com nuances pequenas e
   específicas por classe, não uma vantagem clara de um lado).
-- [ ] **3. Baselines externos** (SVM com kernel RBF, Random Forest,
-  XGBoost/LightGBM, k-NN fuzzy) -- hoje só comparamos Fuzzy-OPF vs. OPF
-  padrão; nunca comparamos contra classificadores fora da família OPF.
-  Mais trabalhoso (treinar modelos novos via scikit-learn nos datasets já
-  validados), mas alto retorno para o artigo.
+- [x] **3. Baselines externos** (SVM RBF, Random Forest, XGBoost, k-NN) --
+  **implementado, com um episódio de investigação importante no meio**.
+  `compare_baselines.py` (GridSearchCV pra cada baseline, comparação justa
+  contra padrões não-otimizados) + configs pros 8 datasets validados.
+
+  **Episódio de investigação (Thyroid)**: a primeira rodada mostrou um gap
+  absurdo (~20+ pontos) entre Fuzzy-OPF (~0.75) e os baselines externos
+  (94-99%), grande demais pra ser real. Investigação sistemática, na
+  ordem testada: (1) métrica de distância (`log_squared_euclidean` vs.
+  `euclidean`) -- descartada, mesma acurácia; (2) normalização -- descartada,
+  sem normalizar ficou PIOR (0.6768), não melhor; (3) conversão de dados --
+  descartada, valores das colunas batem exatamente com o formato padrão
+  do `ann-thyroid`; (4) `opfython` puro (sem nada nosso) -- ainda baixo
+  (0.6776), afastando a hipótese de bug no nosso port; (5) protótipos por
+  classe -- desproporcionalmente altos nas minoritárias (44.7% e 88.7%
+  das amostras viraram protótipo), sugerindo sobreposição entre classes,
+  mas descartado como causa principal; (6) duplicatas de features com
+  rótulos conflitantes -- zero encontradas, descartada; (7) 2 vs. 3
+  classes (o artigo usa 2, nós usamos 3) -- mesclando pra 2 classes,
+  melhora modesta (0.7865), não decisiva; (8) diferença estrutural
+  `opfython` (Python) vs. `LibOPF` (C, usado no artigo original) via
+  empates de distância ("tie-zones", mencionado no próprio artigo na
+  seção de Discussão) -- descartada, só 0.3% dos pares tinham distância
+  empatada no Thyroid.
+
+  **Causa raiz real (achada na tentativa 9)**: `opf_accuracy()` da
+  `opfython` não é acurácia simples -- é uma **métrica balanceada por
+  classe** (soma taxas de falso positivo/negativo por classe, normalizada
+  pelo tamanho de cada classe, depois tira a média -- convenção
+  estabelecida na literatura de OPF, não um bug). Toda a investigação
+  desse projeto usou essa métrica para Fuzzy-OPF/OPF, mas
+  `compare_baselines.py` originalmente usava **acurácia simples**
+  `(preds==y_test).mean()` para os baselines sklearn -- uma comparação de
+  métricas diferentes, não um problema real de desempenho. Confirmado
+  isolando: mesmo modelo, mesmos dados, `opf_accuracy`=0.6776 vs. acurácia
+  simples=0.9208. **Corrigido**: `compare_baselines.py` agora usa
+  `opf_accuracy()` uniformemente para todos os métodos.
+
+  **Resultado final, correto, no Thyroid (20 runs)**:
+
+  | Método | Acurácia balanceada média |
+  |---|---|
+  | Random Forest | 0.9883 |
+  | XGBoost | 0.9877 |
+  | SVM (RBF) | 0.8921 |
+  | **Fuzzy-OPF** | **0.7477** |
+  | k-NN | 0.7101 |
+
+  **Conclusão honesta para o artigo**: métodos baseados em árvore (RF,
+  XGBoost) dominam datasets com desbalanceamento severo como o Thyroid --
+  padrão bem documentado na literatura de ML geral, não uma fraqueza
+  específica do Fuzzy-OPF. Fuzzy-OPF **supera o k-NN** (o baseline
+  conceitualmente mais próximo, também baseado em distância/instância) --
+  resultado legítimo dentro da categoria. O gap pro RF/XGBoost é real, mas
+  já sabemos reduzi-lo: combinar com SMOTE (que já levou Fuzzy-OPF de
+  0.7416 para 0.7931 no Thyroid, ver achado de desbalanceamento) é o
+  próximo passo natural antes de reportar essa comparação no artigo.
+
+  **Pendente**: rodar `compare_baselines.py` (com a métrica corrigida) nos
+  outros 7 datasets (Boat, Cone-Torus, Data1/2/3, Breast Tissue, MPEG-7
+  BAS) -- o resultado inicial (métrica errada) foi descartado para todos,
+  não só o Thyroid.
 - [ ] **4. Teste de Friedman + post-hoc Nemenyi** -- depende do item 3
   (precisa de 3+ classificadores para fazer sentido; com só Fuzzy-OPF vs.
   OPF, Wilcoxon já basta).
