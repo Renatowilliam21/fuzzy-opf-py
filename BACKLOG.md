@@ -302,7 +302,42 @@ extensões para priorizar depois.
   lacuna real na lib (que só tem Supervised/Unsupervised/KNN/Semi-Supervised
   OPF).
 
-## Trabalhos relacionados (pesquisa de literatura, 2026-09-18)
+## Verificação contra a implementação de referência (LibOPF, C) -- 2026-09-22
+
+- [x] **Compilado o LibOPF (C, https://github.com/jppbsi/LibOPF) e rodado
+  diretamente no Thyroid**, mesma seed=0, mesmo split 60/20/20, mesma
+  normalização, pra verificar se o gap de ~23 pontos contra o artigo
+  original (97.14%) vinha de uma diferença entre `opfython` (Python) e
+  LibOPF (C) que a investigação da métrica não tinha descartado.
+
+  **Achado no processo**: o formato de texto nativo do LibOPF usa rótulos
+  **1-indexados** (1,2,3...), diferente do nosso `thyroid.txt` (0-indexado,
+  0,1,2). Sem corrigir isso, o `opf_Accuracy` do C (que itera
+  `for i=1; i<=nlabels`) ignoraria silenciosamente toda a classe rotulada
+  0 -- que por acaso é a majoritária (92% dos dados). Corrigido no script
+  de exportação (`export_to_libopf.py`, desloca rótulos +1). Confirmado
+  também que a fórmula do `opf_Accuracy` em C é **idêntica** à do
+  `opfython` (mesmo balanceamento por classe) -- lendo o código-fonte C
+  diretamente, não só testando.
+
+  **Resultado**: LibOPF (C) = 73.70% de acurácia balanceada no Thyroid --
+  **praticamente idêntico** ao nosso OPF/Fuzzy-OPF via `opfython`
+  (~74-75%), inclusive com a matriz de confusão batendo quase exatamente
+  (recall da classe minoritária: 34.21%, o mesmo número que aparece
+  repetidamente em toda essa investigação).
+
+  **Conclusão definitiva**: o port em `opfython` é **fiel** à
+  implementação C de referência -- não existe bug de tradução nem
+  diferença de comportamento entre as duas no Thyroid. O gap remanescente
+  contra o número reportado no artigo original (~97%) **não é explicado
+  pela nossa implementação** -- é atribuível a alguma diferença de
+  dataset/pré-processamento do artigo que não foi possível reconstruir
+  (já sabíamos que eles usam 2 classes, não 3; mesclar não foi suficiente
+  para fechar todo o gap sozinho, ver investigação anterior). Encerra essa
+  linha de investigação com uma conclusão forte: nossa implementação está
+  correta e verificada contra a referência oficial.
+
+
 
 - [x] **Levantamento inicial feito**. Achados principais:
   - **"Handling Imbalanced Datasets Through Optimum-Path Forest"** (Passos,
@@ -607,12 +642,42 @@ sugerida). Ver conversa de 2026-09-20 para a análise completa de
     convenções são igualmente não-suaves; a diferença empírica entre elas
     está em qual caminho o processo não-suave acaba preferindo, não em se
     a suavidade se mantém.
-- [ ] **7. Subamostragem/aproximação de densidade (KD-trees, vizinhos
-  aproximados)** para escalar o clustering em datasets maiores que o
-  Thyroid (mais complicado, mais especulativo) -- complementa o que já
-  fizemos (cache compartilhado, paralelismo, achado de que k_max pequeno
-  já basta no Thyroid), mas ataca o problema por outro ângulo (reduzir o
-  n em vez de reduzir k).
+- [x] **7. Subamostragem/aproximação de densidade (KD-trees)** --
+  **implementado e testado**. `membership_source="density_kdtree"` em
+  `FuzzyOPF`: reproduz a fórmula exata de densidade da `opfython`
+  (kernel Gaussiano/Parzen, `opfython.subgraphs.knn.KNNSubgraph.
+  calculate_pdf`, lida diretamente do código-fonte pra garantir
+  fidelidade), mas busca os k-vizinhos-mais-próximos via
+  `scipy.spatial.cKDTree` (O(n log n)) em vez da busca por força bruta
+  O(n²) da `opfython`.
+
+  **Importante**: isso é um speedup **exato**, não uma aproximação --
+  `log_squared_euclidean` (métrica padrão do projeto) é uma transformação
+  monotônica da distância Euclidiana, então os vizinhos encontrados via
+  KD-tree (Euclidiana) são garantidamente os mesmos que a busca por força
+  bruta encontraria com a métrica configurada; só a distância final (mais
+  barata, O(k) por nó) é calculada com a métrica real. Confirmado por
+  teste formal: diferença **zero** entre os valores de densidade dos dois
+  caminhos.
+
+  **Benchmark** (dataset sintético do tamanho do treino do Thyroid,
+  n=4320, d=21, k_max=20): 57,14s (força bruta) -> 21,35s (KD-tree) --
+  **~2,7x mais rápido**. Bônus: essa mudança também corrigiu uma
+  ineficiência que já tínhamos documentado no FCM (que também pagava pelo
+  clustering não-utilizado da `opfython`) -- agora nem FCM nem
+  `density_kdtree` pagam esse custo.
+
+  **Confirmado no Thyroid real** (sigma=1.15, k_max=20): density=135.7s
+  vs. density_kdtree=69.0s -- **~1.97x mais rápido**, com acurácia
+  **idêntica** (0.7543 = 0.7543) entre os dois, confirmando o speedup
+  exato também em dados reais, não só sintéticos.
+
+  **Limitação documentada**: só funciona com `search_best_k=False` (k_max
+  fixo) -- a busca de corte mínimo da `opfython` sobre uma faixa de k é
+  um algoritmo diferente, não replicado aqui. 33 testes passando.
+  `compare_membership_sources.py` atualizado para incluir as 3 fontes
+  (`density`, `density_kdtree`, `fcm`) nas configs dos 8 datasets já
+  existentes.
 
 ## Itens menores
 

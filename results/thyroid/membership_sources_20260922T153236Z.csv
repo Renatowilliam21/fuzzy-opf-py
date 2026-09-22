@@ -1,0 +1,4 @@
+membership_source,k_max,sigma,test_accuracy,fit_seconds
+density,20,1.15,0.7543,135.7
+density_kdtree,20,1.15,0.7543,69.0
+fcm,20,1.15,0.7575,68.3
