@@ -1,0 +1,18 @@
+dataset: data/raw/data3.dat
+n_runs: 20
+seed: 0
+search_best_k: false
+membership_side: target
+
+# Desbalanceamento moderado (31.5%/8.2%, razao ~3.8x, 5 classes) -- o
+# candidato mais promissor dos 3 (fora o Thyroid).
+balance:
+  method: smote
+  strategy: balance
+  k_neighbors: 5
+
+tuning:
+  method: ga
+  k_max_bounds: [1, 120]
+  n_agents: 15
+  n_iterations: 10

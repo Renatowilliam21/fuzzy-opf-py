@@ -1,0 +1,19 @@
+dataset: data/raw/breast-tissue.txt
+n_runs: 20
+seed: 0
+search_best_k: false
+membership_side: target
+
+# Desbalanceamento leve (~1.6x, 6 classes, dataset pequeno/ruidoso --
+# ja sabemos que a validacao pequena atrapalha buscas aqui, ver achado
+# do overlap de seeds no backlog).
+balance:
+  method: smote
+  strategy: balance
+  k_neighbors: 5
+
+tuning:
+  method: ga
+  k_max_bounds: [1, 40]
+  n_agents: 15
+  n_iterations: 10

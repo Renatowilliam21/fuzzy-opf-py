@@ -302,6 +302,42 @@ extensões para priorizar depois.
   lacuna real na lib (que só tem Supervised/Unsupervised/KNN/Semi-Supervised
   OPF).
 
+## SMOTE + busca robusta nos demais datasets desbalanceados -- 2026-09-22
+
+- [x] **Testado SMOTE + busca via GA robusta (n_agents=15) em Cone-Torus,
+  Data3 e Breast Tissue** -- motivado pela pergunta "será que o ganho do
+  SMOTE no Thyroid generaliza pros outros datasets desbalanceados?".
+  Primeiro caracterizamos o desbalanceamento real de cada um dos 8
+  datasets (razão maioria/minoria): Boat (~1.03x), Data1 (~1.25x), Data2
+  (~1.16x) e MPEG-7 BAS (1.00x, perfeitamente balanceado) são
+  essencialmente balanceados -- SMOTE não se aplica. Cone-Torus (~2.3x),
+  Breast Tissue (~1.6x) e Data3 (~3.8x) têm desbalanceamento leve a
+  moderado. Thyroid (~30x) é o único com desbalanceamento severo.
+
+  **Resultado**:
+  - **Breast Tissue**: sem mudança perceptível (0.72 com SMOTE, dentro da
+    faixa 0.70-0.73 já observada sem SMOTE em múltiplas seeds).
+  - **Cone-Torus**: OPF e Fuzzy-OPF melhoraram quase igual (+0.0112 e
+    +0.0109) -- mas a comparação não é limpa (orçamento de busca também
+    mudou, n_iterations=10 vs. 30 da config original), e o ganho não foi
+    específico do Fuzzy-OPF.
+  - **Data3**: SMOTE **não ajudou** -- Fuzzy-OPF caiu de 0.9935 para
+    0.9916 (empatando com OPF, que subiu ligeiramente); a pequena
+    vantagem que existia sem SMOTE desapareceu.
+
+  **Conclusão**: o benefício do SMOTE **não generaliza** para qualquer
+  dataset desbalanceado -- é proporcional à combinação de (1) severidade
+  real do desbalanceamento e (2) espaço de melhora disponível (acurácia
+  longe do teto). No Data3, a acurácia já estava perto de 99% sem SMOTE --
+  não havia "problema" real para o SMOTE resolver, e a técnica introduziu
+  ruído em vez de ajudar. No Thyroid, havia desbalanceamento severo E
+  acurácia baixa o suficiente para ter espaço de melhora real, condição
+  que nenhum dos outros 7 datasets reproduz. **SMOTE não é correção
+  universal para desbalanceamento no Fuzzy-OPF** -- funciona
+  especificamente no regime "desbalanceamento severo + acurácia baixa",
+  não em qualquer grau de desbalanceamento. Resultados em
+  `results/{cone-torus,data3,breast-tissue}/2026*_quadratic.csv`.
+
 ## Verificação contra a implementação de referência (LibOPF, C) -- 2026-09-22
 
 - [x] **Compilado o LibOPF (C, https://github.com/jppbsi/LibOPF) e rodado

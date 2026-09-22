@@ -1,0 +1,19 @@
+dataset: data/raw/cone-torus.dat
+n_runs: 20
+seed: 0
+search_best_k: false
+membership_side: target
+
+# Desbalanceamento leve (52%/23%, razao ~2.3x) -- SMOTE + busca robusta
+# (mesmo orcamento que funcionou bem no Thyroid) para ver se ha ganho real
+# mesmo com desbalanceamento moderado.
+balance:
+  method: smote
+  strategy: balance
+  k_neighbors: 5
+
+tuning:
+  method: ga
+  k_max_bounds: [1, 150]
+  n_agents: 15
+  n_iterations: 10
