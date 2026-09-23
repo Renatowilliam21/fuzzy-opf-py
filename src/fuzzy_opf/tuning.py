@@ -30,8 +30,11 @@ from opytimizer.core.optimizer import Optimizer
 from opytimizer.optimizers.single_objective.evolutionary.ga import GA
 from opytimizer.optimizers.single_objective.misc.cem import CEM
 from opytimizer.optimizers.single_objective.swarm.pso import PSO
+from opytimizer.optimizers.single_objective.evolutionary.de import DE
+from opytimizer.optimizers.single_objective.population.gwo import GWO
 from opytimizer.optimizers.multi_objective.evolutionary.nsga2 import NSGA2
 from opytimizer.spaces.search import SearchSpace
+from opytimizer.core.stopping import MaxIterations
 
 from opfython.math.general import opf_accuracy
 from opfython.models.unsupervised import UnsupervisedOPF
@@ -284,7 +287,7 @@ def _run_metaheuristic_search(
         function = Function(fitness_fn)
 
         task = Opytimizer(space, optimizer, function, save_agents=False)
-        history = task.start(n_iterations=n_iterations)
+        history = task.start(stopping_criteria=MaxIterations(n_iterations))
 
     best_agent = space.best_agent
     best_k_max = int(np.clip(round(best_agent.position[0, 0]), *k_max_bounds))
@@ -334,6 +337,77 @@ def genetic_search(
     """
     return _run_metaheuristic_search(
         GA(), X_train, Y_train, X_val, Y_val, k_max_bounds,
+        n_agents, n_iterations, search_best_k, membership_side, membership_kind, distance, seed,
+        cluster_cache=cluster_cache, cv_folds=cv_folds,
+    )
+
+
+def de_search(
+    X_train: np.ndarray,
+    Y_train: np.ndarray,
+    X_val: np.ndarray,
+    Y_val: np.ndarray,
+    k_max_bounds: tuple[int, int] = (1, 150),
+    n_agents: int = 15,
+    n_iterations: int = 30,
+    search_best_k: bool = True,
+    membership_side: str = "target",
+    membership_kind: str = "quadratic",
+    distance: str = "log_squared_euclidean",
+    seed: int | None = None,
+    cluster_cache: dict | None = None,
+    cv_folds: int | None = None,
+) -> TuningResult:
+    """Finds (k_max, sigma) with Differential Evolution instead of grid
+    search. Same interface and semantics as genetic_search/pso_search (see
+    their docstrings) -- only the underlying opytimizer.Optimizer differs.
+
+    NOTE: unlike GA/PSO, DE's mutation step (opytimizer's
+    DE.update, eq. 1-4) samples 3 DISTINCT agents excluding the current
+    one for every update, so it structurally requires n_agents >= 4 --
+    with fewer, opytimizer crashes deep inside numpy with a cryptic
+    "Cannot take a larger sample than population" error instead of a
+    clear message. Validated here instead, since this project's smaller
+    search-budget presets (e.g. n_agents=3, chosen for GA/PSO to still
+    behave reasonably on a small budget) are BELOW DE's minimum.
+    """
+    if n_agents < 4:
+        raise ValueError(
+            f"Differential Evolution requires n_agents >= 4 (its mutation step samples "
+            f"3 distinct agents excluding the current one each update), got n_agents={n_agents}. "
+            f"This is a structural requirement of DE itself, not specific to this project -- "
+            f"raise n_agents to at least 4 when using de_search (directly, or via "
+            f"run_hyperparam_search.py's config)."
+        )
+    return _run_metaheuristic_search(
+        DE(), X_train, Y_train, X_val, Y_val, k_max_bounds,
+        n_agents, n_iterations, search_best_k, membership_side, membership_kind, distance, seed,
+        cluster_cache=cluster_cache, cv_folds=cv_folds,
+    )
+
+
+def gwo_search(
+    X_train: np.ndarray,
+    Y_train: np.ndarray,
+    X_val: np.ndarray,
+    Y_val: np.ndarray,
+    k_max_bounds: tuple[int, int] = (1, 150),
+    n_agents: int = 15,
+    n_iterations: int = 30,
+    search_best_k: bool = True,
+    membership_side: str = "target",
+    membership_kind: str = "quadratic",
+    distance: str = "log_squared_euclidean",
+    seed: int | None = None,
+    cluster_cache: dict | None = None,
+    cv_folds: int | None = None,
+) -> TuningResult:
+    """Finds (k_max, sigma) with the Grey Wolf Optimizer instead of grid
+    search. Same interface and semantics as genetic_search/pso_search (see
+    their docstrings) -- only the underlying opytimizer.Optimizer differs.
+    """
+    return _run_metaheuristic_search(
+        GWO(), X_train, Y_train, X_val, Y_val, k_max_bounds,
         n_agents, n_iterations, search_best_k, membership_side, membership_kind, distance, seed,
         cluster_cache=cluster_cache, cv_folds=cv_folds,
     )
@@ -389,14 +463,14 @@ def cem_search(
     like this one (k_max, sigma). Same signature/semantics; see
     genetic_search's docstring for argument details.
 
-    KNOWN ISSUE (as of opytimizer 4.0.0 + numpy>=2.0): `CEM.compile()`
-    assigns a shape-(1,) array into a scalar slot of `self.mean`/`self.std`,
-    which numpy>=2.0 rejects (`TypeError: only 0-dimensional arrays can be
-    converted to Python scalars`). This is a bug in opytimizer itself, not
-    in this wrapper -- confirmed by reproducing the failing assignment in
-    isolation, outside of fuzzy_opf entirely. Calling this function will
-    currently raise that error; kept here so it starts working automatically
-    once opytimizer patches it, without any change needed on our side.
+    FIXED as of opytimizer>=5.0.0 (2026-09-23): previously (opytimizer
+    4.0.0/4.1.0 + numpy>=2.0), `CEM.compile()` assigned a shape-(1,) array
+    into a scalar slot of `self.mean`/`self.std`, which numpy>=2.0 rejects
+    (`TypeError: only 0-dimensional arrays can be converted to Python
+    scalars`) -- a bug in opytimizer itself (confirmed by reproducing the
+    failing assignment in isolation, outside of fuzzy_opf entirely, and
+    reported upstream: https://github.com/recogna-lab/opytimizer/issues/10).
+    Confirmed working again with opytimizer 5.0.1.
     """
     return _run_metaheuristic_search(
         CEM(), X_train, Y_train, X_val, Y_val, k_max_bounds,
@@ -642,11 +716,18 @@ def nsga2_search(
             n_agents=n_agents, n_variables=n_variables, n_objectives=2,
             lower_bound=lower_bound, upper_bound=upper_bound,
         )
-        function = Function([objective_error, objective_cost])
+        # opytimizer 5.x's Function no longer auto-wraps a list of
+        # callables for multi-objective (its `pointer` setter now
+        # requires a single callable, see BACKLOG.md) -- wrap the two
+        # objectives into one function that returns both values instead.
+        def combined_objective(x: np.ndarray) -> list[float]:
+            return [objective_error(x), objective_cost(x)]
+
+        function = Function(combined_objective)
         optimizer = NSGA2()
 
         task = Opytimizer(space, optimizer, function, save_agents=False)
-        history = task.start(n_iterations=n_iterations)
+        history = task.start(stopping_criteria=MaxIterations(n_iterations))
 
     pareto_points = set()
     for agent, rank in zip(space.agents, optimizer.rank):

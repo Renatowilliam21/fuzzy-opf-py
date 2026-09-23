@@ -1,6 +1,7 @@
 """Compares hyperparameter search methods for Fuzzy-OPF under a matched
-evaluation budget: GA, PSO, and random search (the "negative control" --
-any method that doesn't beat it isn't earning its complexity).
+evaluation budget: GA, PSO, Bayesian Optimization (Optuna/TPE), and random
+search (the "negative control" -- any method that doesn't beat it isn't
+earning its complexity).
 
 Same train/val/test split for every method (fair comparison), optional
 pruning applied once before all of them (so the comparison reflects search
@@ -16,8 +17,10 @@ Writes results/<dataset>/hyperparam_search_<timestamp>.csv with columns:
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -29,13 +32,47 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 # Import fuzzy_opf FIRST: it disables opfython's crash-prone per-module file
 # logging (see fuzzy_opf/__init__.py) before any of the opfython imports
 # below get a chance to trigger it.
-from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset, pso_search, random_search
+from fuzzy_opf import FuzzyOPF, genetic_search, load_dataset, pso_search, random_search, bayesian_search, de_search, gwo_search, cem_search
 from fuzzy_opf.datasets import standardize, stratified_split, apply_balance
 
 from opfython.math.general import opf_accuracy
 from opfython.stream.splitter import split
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run_one_search(method_name: str, X_train, y_train, X_val, y_val, n_agents, n_iterations, actual_budget, common):
+    """Module-level (picklable) dispatcher, needed for ProcessPoolExecutor:
+    the closures/lambdas the sequential version used aren't picklable.
+    Each call gets its OWN private clustering cache (a shared dict can't be
+    synced live across separate processes) -- a small, one-time redundancy
+    cost per method, traded for running all three methods concurrently.
+    """
+    if method_name == "ga":
+        result = genetic_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, **common)
+    elif method_name == "pso":
+        result = pso_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, **common)
+    elif method_name == "random":
+        result = random_search(X_train, y_train, X_val, y_val, n_evaluations=actual_budget, **common)
+    elif method_name == "bayesian":
+        result = bayesian_search(X_train, y_train, X_val, y_val, n_trials=actual_budget, **common)
+    elif method_name == "de":
+        # DE structurally requires n_agents >= 4 (see de_search's
+        # docstring) -- bump it up here if the general n_agents (e.g. 3,
+        # chosen for GA/PSO's small-budget local-optimum test) is too
+        # small, recomputing n_iterations from the same nominal budget so
+        # DE's total stays comparable to the other methods' instead of
+        # silently running a different-sized search.
+        de_n_agents = max(n_agents, 4)
+        de_n_iterations = max(1, actual_budget // de_n_agents)
+        result = de_search(X_train, y_train, X_val, y_val, n_agents=de_n_agents, n_iterations=de_n_iterations, **common)
+    elif method_name == "gwo":
+        result = gwo_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, **common)
+    elif method_name == "cem":
+        result = cem_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, **common)
+    else:
+        raise ValueError(f"Unknown method: {method_name}")
+    return method_name, result
 
 
 def run(config_path: str) -> Path:
@@ -105,22 +142,57 @@ def run(config_path: str) -> Path:
     n_iterations = max(1, budget // n_agents)
     actual_budget = n_agents * n_iterations
 
-    # Shared across all three methods below: when k_max is fixed (or its
-    # range is narrow), a k_max already clustered by GA is reused by PSO
-    # and Random instead of reclustered from scratch.
-    cluster_cache: dict = {}
+    # NOTE (measured on Cone-Torus): for cheap/fast datasets, parallel mode
+    # can be SLOWER than sequential -- each of the 3 processes pays a fixed
+    # startup cost (re-importing numpy/opfython, numba JIT warmup on first
+    # use) that isn't amortized when the actual search only takes a few
+    # seconds. Parallelism pays off on expensive datasets (e.g. Thyroid),
+    # where minutes of real computation per method dwarf that overhead.
+    # Set parallel: false in the config for small/fast datasets.
+    parallel = config.get("parallel", True)
 
-    methods = {
-        "ga": lambda: genetic_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, cluster_cache=cluster_cache, **common),
-        "pso": lambda: pso_search(X_train, y_train, X_val, y_val, n_agents=n_agents, n_iterations=n_iterations, cluster_cache=cluster_cache, **common),
-        "random": lambda: random_search(X_train, y_train, X_val, y_val, n_evaluations=actual_budget, cluster_cache=cluster_cache, **common),
-    }
+    method_names = ["ga", "pso", "random", "bayesian", "de", "gwo", "cem"]
+    results_by_name = {}
+
+    if parallel:
+        # GA, PSO, and Random are three fully independent searches -- run
+        # them concurrently (separate processes, since CPU-bound work
+        # doesn't benefit from threads under the GIL) instead of one after
+        # another. No shared clustering cache across processes (see
+        # _run_one_search's docstring): each pays its own clustering cost,
+        # but the concurrent wall time more than makes up for it on a
+        # multi-core machine.
+        t0 = time.time()
+        # Cap workers at the machine's core count -- with 6 methods now
+        # (ga, pso, random, bayesian, de, gwo), running all of them at once
+        # on a 4-core machine would oversubscribe and slow each one down
+        # via contention (see BACKLOG.md's earlier note on this). Extra
+        # methods beyond the core count are queued automatically by
+        # ProcessPoolExecutor, not dropped.
+        max_workers = min(len(method_names), os.cpu_count() or len(method_names))
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(_run_one_search, name, X_train, y_train, X_val, y_val, n_agents, n_iterations, actual_budget, common)
+                for name in method_names
+            ]
+            for future in futures:
+                name, result = future.result()
+                results_by_name[name] = (result, time.time() - t0)  # wall time = elapsed since the batch started
+    else:
+        # Shared clustering cache only makes sense sequentially (see
+        # run_hyperparam_search's original design): a k_max already
+        # clustered by GA is reused by PSO and Random instead of
+        # reclustered from scratch, in exchange for no parallelism.
+        cluster_cache: dict = {}
+        common_seq = dict(common, cluster_cache=cluster_cache)
+        for name in method_names:
+            t0 = time.time()
+            _, result = _run_one_search(name, X_train, y_train, X_val, y_val, n_agents, n_iterations, actual_budget, common_seq)
+            results_by_name[name] = (result, time.time() - t0)
 
     rows = []
-    for name, fn in methods.items():
-        t0 = time.time()
-        result = fn()
-        wall_seconds = time.time() - t0
+    for name in method_names:
+        result, wall_seconds = results_by_name[name]
 
         model = FuzzyOPF(
             k_max=result.k_max, sigma=result.sigma,

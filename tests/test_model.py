@@ -456,3 +456,179 @@ def test_wilcoxon_load_paired_accuracies(tmp_path):
     opf_accs, fuzzy_accs = load_paired_accuracies(str(csv_path))
     assert opf_accs == [0.80, 0.85]
     assert fuzzy_accs == [0.82, 0.84]
+
+
+def test_predict_class_scores_shape_and_consistency(toy_dataset):
+    X, y = toy_dataset
+    X_train, y_train = X[:80], y[:80]
+    X_test = X[80:]
+
+    model = FuzzyOPF(k_max=5, sigma=0.6, search_best_k=False)
+    model.fit(X_train, y_train)
+
+    preds = model.predict(X_test)
+    scores = model.predict_class_scores(X_test)
+
+    n_classes = len(set(y_train.tolist()))
+    assert scores.shape == (len(X_test), n_classes)
+
+    # Each row must sum to ~1 (sklearn's roc_auc_score requirement).
+    assert np.allclose(scores.sum(axis=1), 1.0, atol=1e-6)
+
+    # The class with the highest score must match predict()'s own label --
+    # the full unpruned scan must agree with the pruned competition winner.
+    classes = sorted(set(y_train.tolist()))
+    score_preds = [classes[i] for i in np.argmax(scores, axis=1)]
+    assert score_preds == list(preds)
+
+
+def test_invalid_membership_source_raises():
+    with pytest.raises(ValueError):
+        FuzzyOPF(membership_source="oops")
+
+
+def test_fcm_membership_satisfies_boundary_conditions(toy_dataset):
+    X, y = toy_dataset
+    sigma = 0.6
+
+    model = FuzzyOPF(k_max=5, sigma=sigma, search_best_k=False, membership_source="fcm")
+    model.fit(X, y)
+    memberships = [node.membership for node in model.subgraph.nodes]
+
+    assert np.isclose(min(memberships), sigma, atol=1e-6)
+    assert np.isclose(max(memberships), 1.0, atol=1e-6)
+
+
+def test_fcm_and_density_give_valid_predictions(toy_dataset):
+    X, y = toy_dataset
+    X_train, y_train = X[:80], y[:80]
+    X_test = X[80:]
+
+    for source in ["density", "fcm"]:
+        model = FuzzyOPF(k_max=5, sigma=0.6, search_best_k=False, membership_source=source)
+        model.fit(X_train, y_train)
+        preds = model.predict(X_test)
+        assert len(preds) == len(X_test)
+        assert set(preds).issubset(set(y_train.tolist()))
+
+
+def test_density_kdtree_requires_fixed_k():
+    with pytest.raises(ValueError):
+        FuzzyOPF(membership_source="density_kdtree", search_best_k=True)
+
+
+def test_density_kdtree_satisfies_boundary_conditions(toy_dataset):
+    X, y = toy_dataset
+    sigma = 0.6
+
+    model = FuzzyOPF(k_max=5, sigma=sigma, search_best_k=False, membership_source="density_kdtree")
+    model.fit(X, y)
+    memberships = [node.membership for node in model.subgraph.nodes]
+
+    assert np.isclose(min(memberships), sigma, atol=1e-6)
+    assert np.isclose(max(memberships), 1.0, atol=1e-6)
+
+
+def test_density_kdtree_matches_brute_force_density(toy_dataset):
+    """The KD-tree path must be an EXACT speedup, not an approximation:
+    membership values must match the brute-force "density" path exactly
+    for the project's default (Euclidean-derived) distance metric."""
+    X, y = toy_dataset
+
+    model_density = FuzzyOPF(k_max=5, sigma=0.6, search_best_k=False, membership_source="density")
+    model_density.fit(X, y)
+    rho_density = np.array([n.density for n in model_density.subgraph.nodes])
+
+    model_kdtree = FuzzyOPF(k_max=5, sigma=0.6, search_best_k=False, membership_source="density_kdtree")
+    model_kdtree.fit(X, y)
+    rho_kdtree = np.array([n.density for n in model_kdtree.subgraph.nodes])
+
+    assert np.allclose(rho_density, rho_kdtree, atol=1e-6)
+
+
+def test_de_search_returns_valid_result(toy_dataset):
+    from fuzzy_opf import de_search
+
+    X, y = toy_dataset
+    X_train, y_train = X[:60], y[:60]
+    X_val, y_val = X[60:90], y[60:90]
+
+    result = de_search(
+        X_train, y_train, X_val, y_val,
+        k_max_bounds=(1, 10), n_agents=5, n_iterations=3, search_best_k=False, seed=0,
+    )
+    assert 1 <= result.k_max <= 10
+    assert 0.2 <= result.sigma <= 1.2
+    assert 0.0 <= result.accuracy <= 1.0
+
+
+def test_gwo_search_returns_valid_result(toy_dataset):
+    from fuzzy_opf import gwo_search
+
+    X, y = toy_dataset
+    X_train, y_train = X[:60], y[:60]
+    X_val, y_val = X[60:90], y[60:90]
+
+    result = gwo_search(
+        X_train, y_train, X_val, y_val,
+        k_max_bounds=(1, 10), n_agents=5, n_iterations=3, search_best_k=False, seed=0,
+    )
+    assert 1 <= result.k_max <= 10
+    assert 0.2 <= result.sigma <= 1.2
+    assert 0.0 <= result.accuracy <= 1.0
+
+
+def test_corrupt_labels():
+    from fuzzy_opf.datasets import corrupt_labels
+
+    rng = np.random.default_rng(0)
+    y = rng.choice([0, 1, 2], size=500)
+
+    y_noisy = corrupt_labels(y, noise_rate=0.2, random_state=0)
+    n_changed = np.sum(y != y_noisy)
+    assert n_changed == round(0.2 * 500)
+
+    # Corrupted entries never keep their original label.
+    changed = y != y_noisy
+    assert not np.any(y[changed] == y_noisy[changed])
+
+    # noise_rate=0 changes nothing.
+    y_clean = corrupt_labels(y, noise_rate=0.0, random_state=0)
+    assert np.array_equal(y, y_clean)
+
+    with pytest.raises(ValueError):
+        corrupt_labels(y, noise_rate=1.5)
+
+
+def test_predict_proba_and_classes(toy_dataset):
+    X, y = toy_dataset
+    X_train, y_train = X[:80], y[:80]
+    X_test = X[80:]
+
+    model = FuzzyOPF(k_max=5, sigma=0.6, search_best_k=False)
+    model.fit(X_train, y_train)
+
+    assert list(model.classes_) == sorted(set(y_train.tolist()))
+
+    proba = model.predict_proba(X_test)
+    assert proba.shape == (len(X_test), len(model.classes_))
+    assert np.allclose(proba.sum(axis=1), 1.0, atol=1e-6)
+    assert np.array_equal(proba, model.predict_class_scores(X_test))
+
+
+def test_cem_search_returns_valid_result(toy_dataset):
+    """CEM was broken under opytimizer 4.x + numpy>=2.0 (see BACKLOG.md,
+    recogna-lab/opytimizer#10); fixed as of opytimizer 5.0.1."""
+    from fuzzy_opf import cem_search
+
+    X, y = toy_dataset
+    X_train, y_train = X[:60], y[:60]
+    X_val, y_val = X[60:90], y[60:90]
+
+    result = cem_search(
+        X_train, y_train, X_val, y_val,
+        k_max_bounds=(1, 10), n_agents=5, n_iterations=3, search_best_k=False, seed=0,
+    )
+    assert 1 <= result.k_max <= 10
+    assert 0.2 <= result.sigma <= 1.2
+    assert 0.0 <= result.accuracy <= 1.0

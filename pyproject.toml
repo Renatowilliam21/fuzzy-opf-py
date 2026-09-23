@@ -14,7 +14,13 @@ authors = [
 ]
 dependencies = [
   "opfython>=2.0.2",
-  "opytimizer>=4.1.0",
+  # Migrated to opytimizer 5.x on 2026-09-23 (see BACKLOG.md): the only
+  # breaking change affecting this project was Opytimizer.start()'s
+  # signature (n_iterations=N -> stopping_criteria=MaxIterations(N),
+  # imported from opytimizer.core.stopping). Every search method
+  # (GA/PSO/DE/GWO/NSGA2) was re-tested against 5.0.1 before this pin was
+  # raised.
+  "opytimizer>=5.0.0",
   "optuna>=4.0.0",
   "scipy>=1.11",
   "scikit-fuzzy>=0.4",

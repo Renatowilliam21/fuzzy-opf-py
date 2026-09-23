@@ -217,11 +217,12 @@ extensões para priorizar depois.
   usar k_max pequeno (1-8) no Thyroid sem perda de acurácia, ganhando
   velocidade real (clustering escala com k_max). Resultado em
   `results/thyroid/pareto_20260918T201804Z.csv`.
-- [ ] **CEM**: revisitar quando a `opytimizer` corrigir o bug de
-  compatibilidade com NumPy 2.x (`cem_search` já existe, documentado como
-  quebrado). **Reportado oficialmente**:
-  https://github.com/recogna-lab/opytimizer/issues/10 (2026-09-21).
-  Verificar periodicamente se foi corrigido antes de tentar de novo.
+- [x] **CEM**: **resolvido em 2026-09-23** -- a `opytimizer` 5.0.1
+  corrigiu o bug de compatibilidade com NumPy 2.x (issue
+  https://github.com/recogna-lab/opytimizer/issues/10, reportada em
+  2026-09-21). `cem_search()` testado e funcionando, reintegrado como 7º
+  método em `run_hyperparam_search.py`. Ver seção "Migração opytimizer
+  5.x" para detalhes completos.
 - [x] **Funções de pertinência alternativas** — **implementado, testado e
   investigado até conclusão definitiva**. `membership_kind` (linear,
   quadratic [Eq. 5 original], cubic, sigmoid) em `FuzzyOPF`, todas
@@ -391,24 +392,46 @@ Learning -- não tentar espremer no artigo atual.
 
 ## Correção de CI: opytimizer 5.x quebra a API -- 2026-09-23
 
-- [x] **CI falhou por `opytimizer` 5.0.1 (lançada recentemente) ser uma
-  reescrita incompatível** -- `pyproject.toml` só exigia `opytimizer>=4.1.0`
+- [x] **CI falhou por `opytimizer` 5.0.1 (lançada recentemente) mudar a
+  API de orquestração** -- `pyproject.toml` só exigia `opytimizer>=4.1.0`
   sem limite superior, então o `pip install` do CI (ambiente limpo) pegou
-  a versão mais nova disponível no PyPI, diferente da 4.1.0 que está
-  instalada (e validada) na máquina de desenvolvimento. A quebra é
-  estrutural, não um simples parâmetro renomeado: `Opytimizer.start()` foi
-  **removido inteiramente** da classe principal na 5.x (só sobrou `load`
-  como método público) -- API de orquestração inteira redesenhada.
+  a versão mais nova disponível no PyPI, diferente da 4.1.0 que estava
+  instalada (e validada) na máquina de desenvolvimento.
 
-  **Decisão**: não migrar `tuning.py` pra 5.x agora (arriscado demais sem
-  tempo para validar cada método de busca contra uma API nova e ainda
-  não estudada). Corrigido fixando a versão em `pyproject.toml`:
-  `opytimizer>=4.1.0,<5.0.0`, com comentário explicando o porquê (pra não
-  ser removido sem querer no futuro). Confirmado localmente: `pytest -q`
-  volta a dar 37/37 com o pin aplicado. **Migração pra 5.x fica registrada
-  como item de backlog futuro**, não urgente -- exigiria portar
-  `genetic_search`/`pso_search`/`de_search`/`gwo_search`/`nsga2_search`/
-  `bayesian_search` e revalidar cada um contra a API nova.
+  **Correção imediata (mitigação)**: fixado temporariamente em
+  `opytimizer>=4.1.0,<5.0.0` pra destravar o CI rápido.
+
+  **Migração completa feita na sequência**, depois de investigar a fundo
+  a mudança real (menor do que pareceu à primeira vista): só duas coisas
+  quebraram, ambas pontuais:
+  1. `Opytimizer.start(n_iterations=N)` virou
+     `Opytimizer.start(stopping_criteria=MaxIterations(N))`
+     (`from opytimizer.core.stopping import MaxIterations`) -- um design
+     mais flexível (suporta outros critérios de parada, não só contagem
+     fixa de iterações), não uma reformulação sem sentido. Um só lugar no
+     código precisou mudar (`_run_metaheuristic_search`, usada por todos
+     os métodos single-objective) + `nsga2_search` (multiobjetivo, call
+     site separado).
+  2. `Function` não aceita mais uma **lista** de funções pra multiobjetivo
+     (`Function([obj1, obj2])` -- usado pelo NSGA-II) -- agora exige uma
+     única função que retorna os múltiplos valores. Corrigido envolvendo
+     as duas funções objetivo numa função combinadora.
+
+  **Migração completa e validada**: `pyproject.toml` atualizado pra
+  `opytimizer>=5.0.0` (sem limite superior de novo, já que a 5.x é a
+  versão real agora suportada). Todos os 6 métodos de busca
+  (GA/PSO/DE/GWO/Bayesiano/NSGA-II) testados individualmente contra
+  `opytimizer==5.0.1` de verdade instalada -- convergem pra mesma região
+  boa de sigma no Cone-Torus, igual antes. 38 testes passando.
+
+  **Bônus grande**: **o CEM voltou a funcionar na 5.x** -- o bug do
+  NumPy 2.0 que reportamos oficialmente
+  (https://github.com/recogna-lab/opytimizer/issues/10) parece ter sido
+  corrigido nessa versão. `cem_search()` testado e funcionando (inclusive
+  com `n_agents=3`, sem a mesma exigência estrutural do DE). Reintegrado
+  como 7º método em `run_hyperparam_search.py`. Item do CEM no backlog
+  (antes bloqueado) fica resolvido. Vale comentar na issue do GitHub
+  confirmando a correção, para fechar o ciclo com o mantenedor.
 
 ## Roteiro para maior impacto internacional (2026-09-22, análise de sugestões externas)
 
