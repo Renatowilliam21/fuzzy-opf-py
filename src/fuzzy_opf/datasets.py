@@ -461,3 +461,52 @@ def opf_us_undersample(
 
     keep_idx = np.array(sorted(keep_idx))
     return X_train[keep_idx], Y_train[keep_idx]
+
+
+def corrupt_labels(
+    y: np.ndarray,
+    noise_rate: float,
+    random_state: int | None = None,
+) -> np.ndarray:
+    """Randomly corrupts a fraction of labels (symmetric label noise, the
+    standard convention in the label-noise-robustness literature): for
+    each corrupted sample, its label is reassigned to a uniformly random
+    OTHER class (never the original one).
+
+    Motivated by testing whether Fuzzy-OPF's membership weighting acts as
+    a "damper" against noisy prototypes conquering large regions of the
+    graph, compared to standard OPF -- apply this ONLY to the training
+    labels (never to validation/test, which must stay a faithful, clean
+    signal to measure real-world degradation honestly).
+
+    Args:
+        y: Original labels.
+        noise_rate: Fraction of samples to corrupt, in [0, 1]. 0.30 means
+            30% of labels are randomly reassigned.
+        random_state: Seed for reproducibility.
+
+    Returns:
+        A new array (y is not modified in place) with noise_rate of its
+        entries reassigned to a different class.
+    """
+    if not 0.0 <= noise_rate <= 1.0:
+        raise ValueError(f"`noise_rate` must be in [0, 1], got {noise_rate}.")
+
+    rng = np.random.default_rng(random_state)
+    y_noisy = y.copy()
+
+    if noise_rate == 0.0:
+        return y_noisy
+
+    classes = np.unique(y)
+    if len(classes) < 2:
+        raise ValueError("corrupt_labels needs at least 2 distinct classes to reassign a different one.")
+
+    n_corrupt = round(noise_rate * len(y))
+    corrupt_idx = rng.choice(len(y), size=n_corrupt, replace=False)
+
+    for i in corrupt_idx:
+        other_classes = classes[classes != y[i]]
+        y_noisy[i] = rng.choice(other_classes)
+
+    return y_noisy

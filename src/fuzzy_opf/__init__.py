@@ -15,7 +15,7 @@ _opf_logging.get_timed_file_handler = _logging.NullHandler
 
 from .model import FuzzyOPF
 from .ensemble import EnsembleFuzzyOPF
-from .tuning import genetic_search, pso_search, cem_search, random_search, bayesian_search, nsga2_search, TuningResult, ParetoResult
+from .tuning import genetic_search, pso_search, cem_search, random_search, bayesian_search, nsga2_search, de_search, gwo_search, TuningResult, ParetoResult
 from .datasets import (
     load_dataset,
     standardize,
@@ -24,6 +24,7 @@ from .datasets import (
     smote_oversample,
     opf_us_undersample,
     apply_balance,
+    corrupt_labels,
 )
 
 __all__ = [
@@ -35,6 +36,8 @@ __all__ = [
     "random_search",
     "bayesian_search",
     "nsga2_search",
+    "de_search",
+    "gwo_search",
     "TuningResult",
     "ParetoResult",
     "load_dataset",
@@ -44,4 +47,5 @@ __all__ = [
     "smote_oversample",
     "opf_us_undersample",
     "apply_balance",
+    "corrupt_labels",
 ]

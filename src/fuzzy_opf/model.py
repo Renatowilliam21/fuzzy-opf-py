@@ -63,6 +63,9 @@ class FuzzyOPF(OPF):
         search_best_k: bool = True,
         membership_side: MembershipSide = "target",
         membership_kind: str = "quadratic",
+        membership_source: str = "density",
+        fcm_n_clusters: int | None = None,
+        fcm_m: float = 2.0,
         distance: str = "log_squared_euclidean",
     ) -> None:
         """
@@ -102,12 +105,46 @@ class FuzzyOPF(OPF):
                     high density.
                 See ``t`` in ``_compute_membership``: the normalized
                 density (rho - rho_min) / (rho_max - rho_min) in [0, 1].
+            membership_source: What "typicality" measure membership_kind's
+                curve is applied to.
+                  - "density" (default): the OPF's own k-NN density
+                    estimate (Eq. 3), exactly as in the paper.
+                  - "fcm": Fuzzy C-Means clustering on the raw training
+                    features instead -- each sample's highest cluster
+                    membership degree (how confidently it belongs to its
+                    own cluster) is used as its typicality. A genuinely
+                    different membership computation, not just a different
+                    curve shape (unlike membership_kind alone).
+                  - "density_kdtree": the SAME formula as "density"
+                    (Eq. 3), but the k-nearest-neighbour search is done
+                    with a KD-tree (O(n log n)) instead of opfython's own
+                    O(n^2) brute-force adjacency construction -- an exact
+                    (not approximate) speedup for Euclidean-derived
+                    metrics (the project default, "log_squared_euclidean",
+                    qualifies). Only valid with search_best_k=False (a
+                    fixed k_max); opfython's own minimum-cut search over a
+                    k range is a different algorithm, not replicated here.
+            fcm_n_clusters: Number of FCM clusters, only used when
+                membership_source="fcm". Defaults to the number of
+                distinct classes in Y_train at fit time.
+            fcm_m: FCM fuzziness exponent (standard default 2.0), only
+                used when membership_source="fcm".
             distance: Distance metric name registered in opfython.
         """
         if not 0.0 < sigma <= 1.5:
             raise ValueError(f"`sigma` looks out of range (paper uses [0.2, 1.2]), got {sigma}.")
         if k_max < 1:
             raise ValueError(f"`k_max` must be >= 1, got {k_max}.")
+        if membership_source not in ("density", "fcm", "density_kdtree"):
+            raise ValueError(
+                f"`membership_source` must be 'density', 'fcm', or 'density_kdtree', got {membership_source!r}."
+            )
+        if membership_source == "density_kdtree" and search_best_k:
+            raise ValueError(
+                "`membership_source='density_kdtree'` requires `search_best_k=False` "
+                "(a fixed k_max) -- opfython's minimum-cut search over a k range is a "
+                "different algorithm and is not replicated by the KD-tree path."
+            )
         if membership_side not in ("target", "source"):
             raise ValueError(
                 f"`membership_side` must be 'target' or 'source', got {membership_side!r}."
@@ -126,12 +163,43 @@ class FuzzyOPF(OPF):
         self.search_best_k = search_best_k
         self.membership_side = membership_side
         self.membership_kind = membership_kind
+        self.membership_source = membership_source
+        self.fcm_n_clusters = fcm_n_clusters
+        self.fcm_m = fcm_m
 
         self._cluster_model: UnsupervisedOPF | None = None
 
     # ------------------------------------------------------------------ #
     # Membership (Eq. 5)
     # ------------------------------------------------------------------ #
+    def _apply_membership_curve(self, t: np.ndarray) -> np.ndarray:
+        """Maps a normalized [0, 1] "typicality" value t into [sigma, 1]
+        using ``self.membership_kind``'s curve shape. Shared by both
+        membership sources (``_compute_membership`` for the density-based
+        Eq. 5 path, and ``_compute_membership_fcm`` for the FCM path) so
+        the two only differ in how t itself is computed, not in how it's
+        mapped to a final membership value.
+        """
+        if self.membership_kind == "linear":
+            return (1.0 - self.sigma) * t + self.sigma
+        elif self.membership_kind == "cubic":
+            return (1.0 - self.sigma) * t**3 + self.sigma
+        elif self.membership_kind == "sigmoid":
+            # Logistic curve, steepness fixed at k=10 (steep enough to be
+            # visibly S-shaped without being a near step-function).
+            # Normalized so F(0)=sigma and F(1)=1 EXACTLY (a raw logistic
+            # never quite reaches its asymptotes at finite t) -- otherwise
+            # this wouldn't satisfy the same boundary conditions as the
+            # other three shapes, and comparisons between them would be
+            # confounded by unequal ranges, not just curve shape.
+            k = 10.0
+            raw = 1.0 / (1.0 + np.exp(-k * (t - 0.5)))
+            raw_0 = 1.0 / (1.0 + np.exp(k * 0.5))
+            raw_1 = 1.0 / (1.0 + np.exp(-k * 0.5))
+            return self.sigma + (1.0 - self.sigma) * (raw - raw_0) / (raw_1 - raw_0)
+        else:  # "quadratic" (default): Eq. 5 of the paper, unchanged.
+            return (1.0 - self.sigma) * t**2 + self.sigma
+
     def _compute_membership(self, subgraph: Subgraph) -> np.ndarray:
         rho = np.asarray([node.density for node in subgraph.nodes], dtype=float)
 
@@ -153,26 +221,132 @@ class FuzzyOPF(OPF):
             return np.ones_like(rho)
 
         t = (rho - rho_min) / spread
+        return self._apply_membership_curve(t)
 
-        if self.membership_kind == "linear":
-            return (1.0 - self.sigma) * t + self.sigma
-        elif self.membership_kind == "cubic":
-            return (1.0 - self.sigma) * t**3 + self.sigma
-        elif self.membership_kind == "sigmoid":
-            # Logistic curve, steepness fixed at k=10 (steep enough to be
-            # visibly S-shaped without being a near step-function).
-            # Normalized so F(0)=sigma and F(1)=1 EXACTLY (a raw logistic
-            # never quite reaches its asymptotes at finite t) -- otherwise
-            # this wouldn't satisfy the same boundary conditions as the
-            # other three shapes, and comparisons between them would be
-            # confounded by unequal ranges, not just curve shape.
-            k = 10.0
-            raw = 1.0 / (1.0 + np.exp(-k * (t - 0.5)))
-            raw_0 = 1.0 / (1.0 + np.exp(k * 0.5))
-            raw_1 = 1.0 / (1.0 + np.exp(-k * 0.5))
-            return self.sigma + (1.0 - self.sigma) * (raw - raw_0) / (raw_1 - raw_0)
-        else:  # "quadratic" (default): Eq. 5 of the paper, unchanged.
-            return (1.0 - self.sigma) * t**2 + self.sigma
+    def _compute_membership_fcm(self, X_train: np.ndarray, Y_train: np.ndarray) -> np.ndarray:
+        """Alternative to the density-based Eq. 5 (``_compute_membership``):
+        computes per-sample membership from Fuzzy C-Means (FCM) instead of
+        the OPF's own k-NN density estimate.
+
+        Motivated by the "pertinencia alternativa" backlog item: unlike
+        ``membership_kind`` (which only changes the SHAPE of the curve
+        mapping density -> membership), this changes what's being measured
+        in the first place. FCM clusters the raw training features into
+        ``fcm_n_clusters`` fuzzy clusters (default: one per class), giving
+        each sample a membership degree in [0, 1] to every cluster (summing
+        to 1 across clusters, by FCM's own definition). This sample's
+        highest membership among those clusters -- how confidently it
+        belongs to its own "home" cluster -- is used as its typicality,
+        min-max normalized into [0, 1] and then mapped into [sigma, 1] via
+        the same ``membership_kind`` curve used by the density path, for a
+        fair, consistent comparison between the two membership sources.
+
+        NOTE: as of the density_kdtree addition, this path no longer pays
+        for opfython's UnsupervisedOPF clustering step in ``fit()`` --
+        both "fcm" and "density_kdtree" skip it entirely (only
+        membership_source="density" still needs it).
+        """
+        import skfuzzy as fuzz
+
+        n_clusters = self.fcm_n_clusters or len(set(Y_train.tolist()))
+        n_clusters = max(2, min(n_clusters, X_train.shape[0] - 1))  # FCM needs 2 <= c < n_samples
+
+        _cntr, u, _u0, _d, _jm, _p, _fpc = fuzz.cluster.cmeans(
+            X_train.T, c=n_clusters, m=self.fcm_m, error=0.005, maxiter=1000, seed=0,
+        )
+        max_u = u.max(axis=0)  # (n_samples,) -- each sample's confidence in its best-fitting cluster
+
+        u_min, u_max = float(max_u.min()), float(max_u.max())
+        spread = u_max - u_min
+        if spread < 1e-12:
+            logger.warning(
+                "FCM gave identical max-membership for every sample: degenerate partition, "
+                "membership set to 1.0 for every sample."
+            )
+            return np.ones_like(max_u)
+
+        t = (max_u - u_min) / spread
+        return self._apply_membership_curve(t)
+
+    def _compute_membership_kdtree(self, X_train: np.ndarray) -> np.ndarray:
+        """Alternative to the density-based Eq. 5 that reproduces the EXACT
+        same Gaussian-kernel (Parzen-window) density formula opfython's
+        ``KNNSubgraph.calculate_pdf`` uses, but finds each sample's k_max
+        nearest neighbours via a KD-tree (``scipy.spatial.cKDTree``,
+        O(n log n) average case) instead of opfython's own brute-force
+        O(n^2) adjacency construction.
+
+        This is an EXACT speedup, not an approximation, for any distance
+        metric that is a strictly monotonic function of Euclidean distance
+        (true of the project's default, "log_squared_euclidean", and of
+        "squared_euclidean" and plain "euclidean" too): such a metric
+        preserves the RANKING of nearest neighbours, so the k candidates a
+        Euclidean KD-tree query returns are provably the same k neighbours
+        an O(n^2) brute-force search under the configured metric would
+        return -- only the (cheap, O(k) per node) final distance
+        evaluation uses the real ``self.distance_fn``, not raw Euclidean
+        distance. For metrics that do NOT have this property (e.g.
+        cosine/angular distances), this path would silently give the wrong
+        neighbours; it is therefore only exposed for the common
+        Euclidean-derived metrics (see ``membership_source`` validation in
+        ``__init__``).
+
+        Replicates opfython's exact formula (see
+        ``opfython.subgraphs.knn.KNNSubgraph.calculate_pdf``):
+        ``pdf[i] = (1 + sum_{j in kNN(i)} exp(-d(i,j) / constant)) / (k+1)``,
+        ``constant = 2 * max_adjacency_distance / 9`` (graph-wide, the
+        largest distance among any node's k-nearest-neighbour arcs), then
+        min-max scaled into ``[1, MAX_DENSITY]`` (1000, opfython's own
+        constant) before being handed to ``_apply_membership_curve`` the
+        same way the standard density path is.
+
+        NOTE: only used when ``search_best_k=False`` (a fixed k_max) --
+        opfython's own minimum-cut search over a k RANGE is not
+        replicated here, since it evaluates multiple k values by rebuilding
+        the graph each time, a different algorithm entirely.
+        """
+        import opfython.utils.constants as opf_constants
+        from scipy.spatial import cKDTree
+
+        n = X_train.shape[0]
+        k = min(self.k_max, n - 1)
+
+        tree = cKDTree(X_train)
+        # k+1 because a point is always its own (distance-0) nearest
+        # neighbour in a KD-tree query; drop it to keep only the k real
+        # neighbours, matching opfython's own self-excluding adjacency.
+        _, neighbor_idx = tree.query(X_train, k=k + 1)
+        neighbor_idx = neighbor_idx[:, 1:]
+
+        # Exact distances under the CONFIGURED metric, evaluated only for
+        # the k candidates found above (O(n*k), not O(n^2)).
+        dists = np.empty((n, k))
+        for i in range(n):
+            for pos in range(k):
+                j = neighbor_idx[i, pos]
+                dists[i, pos] = self.distance_fn(X_train[i], X_train[j])
+
+        max_adjacency_distance = float(dists.max()) if n > 0 and k > 0 else 0.0
+        constant = 2 * max_adjacency_distance / 9
+        if constant < 0.00001:
+            constant = 1.0  # matches opfython's own degenerate-case fallback
+
+        pdf = (1.0 + np.exp(-dists / constant).sum(axis=1)) / (k + 1)
+
+        min_pdf, max_pdf = float(pdf.min()), float(pdf.max())
+        if min_pdf == max_pdf:
+            # Matches opfython's own early return: equal unscaled densities
+            # assign MAX_DENSITY to every node.
+            rho = np.full(n, float(opf_constants.MAX_DENSITY))
+        else:
+            rho = (opf_constants.MAX_DENSITY - 1) * (pdf - min_pdf) / (max_pdf - min_pdf) + 1
+
+        rho_min, rho_max = float(rho.min()), float(rho.max())
+        spread = rho_max - rho_min
+        if spread < 1e-12:
+            return np.ones_like(rho)
+        t = (rho - rho_min) / spread
+        return self._apply_membership_curve(t)
 
     # ------------------------------------------------------------------ #
     # Training (Algorithm 3)
@@ -200,18 +374,31 @@ class FuzzyOPF(OPF):
 
         # 1) Unsupervised step: densities via OPF clustering (Eq. 3).
         #    This replaces opf_CreateArcs + opf_PDF (+ opf_BestkMinCut).
+        #    Only needed for membership_source="density" (or when a
+        #    precomputed model is explicitly given) -- "fcm" and
+        #    "density_kdtree" compute membership their own way and skip
+        #    this (expensive, O(n^2) in opfython's own implementation)
+        #    step entirely.
         if precomputed_cluster_model is not None:
             cluster_model = precomputed_cluster_model
-        else:
+        elif self.membership_source == "density":
             min_k = 1 if self.search_best_k else self.k_max
             cluster_model = UnsupervisedOPF(min_k=min_k, max_k=self.k_max, distance=self.distance)
             cluster_model.fit(X_train, Y_train)
+        else:
+            cluster_model = None
         self._cluster_model = cluster_model
 
-        membership = self._compute_membership(cluster_model.subgraph)
+        if self.membership_source == "fcm":
+            membership = self._compute_membership_fcm(X_train, Y_train)
+        elif self.membership_source == "density_kdtree":
+            membership = self._compute_membership_kdtree(X_train)
+        else:
+            membership = self._compute_membership(cluster_model.subgraph)
 
         # 2) Supervised step: same graph, complete adjacency, weighted by membership.
         self.subgraph = Subgraph(X_train, Y_train)
+        self.classes_ = np.array(sorted(set(Y_train.tolist())))  # sklearn convention
         for node, m in zip(self.subgraph.nodes, membership):
             node.membership = float(m)
 
@@ -348,6 +535,19 @@ class FuzzyOPF(OPF):
         # within each class's column) -- row-normalize to satisfy that
         # constraint without changing the within-row ranking.
         return raw_scores / raw_scores.sum(axis=1, keepdims=True)
+
+    def predict_proba(self, X_val: np.ndarray) -> np.ndarray:
+        """scikit-learn-style alias for ``predict_class_scores`` -- same
+        (n_query, n_classes) row-normalized output, exposed under the
+        conventional name so FuzzyOPF can be used as a drop-in classifier
+        anywhere code expects the standard ``fit``/``predict``/
+        ``predict_proba`` interface (e.g. sklearn's ``Pipeline``,
+        ``cross_val_predict``, or any tool built against that convention).
+
+        Column order matches ``self.classes_`` (set during ``fit``), the
+        same convention scikit-learn classifiers use.
+        """
+        return self.predict_class_scores(X_val)
 
     def prune(
         self,
