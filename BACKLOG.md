@@ -302,6 +302,129 @@ extensões para priorizar depois.
   lacuna real na lib (que só tem Supervised/Unsupervised/KNN/Semi-Supervised
   OPF).
 
+## Segunda rodada de sugestões externas (2026-09-22) -- tendências TFS + análise cruzada
+
+Registrado a partir de duas listas adicionais (uma revisão de esforço por
+item, e uma análise de tendências da IEEE Transactions on Fuzzy Systems +
+literatura recente do grupo do Prof. Papa). Boa parte já estava no roteiro
+acima (Fuzzy OPF-AD, Active Learning, seleção de protótipos, DE/GWO [já
+implementado], pertinência adaptativa, on-the-fly, GPU/Spark, incremental)
+-- só o que é genuinamente novo é listado aqui, ordenado por esforço.
+
+- [ ] **9. Robustez a ruído de rótulos** -- corromper X% dos rótulos de
+  treino (5% a 30%) e medir quantitativamente se a pertinência fuzzy atua
+  como "amortecedor" contra protótipos ruidosos conquistando grandes
+  regiões do grafo, comparando Fuzzy-OPF vs. OPF padrão sob ruído
+  crescente. Esforço baixo -- reaproveita toda a infraestrutura de
+  experimento já pronta (só precisa de uma função de corrupção de rótulos
+  antes do treino).
+- [ ] **10. API estilo scikit-learn (`predict_proba`)** -- expor
+  `predict_class_scores()` (já implementado para AUC-ROC) sob a convenção
+  `predict_proba`, e formalizar `fit`/`predict`/`predict_proba` como
+  interface pública documentada. Esforço baixo -- quase todo o código já
+  existe, é principalmente documentação/polimento de API. Complementa o
+  item de publicar no PyPI já registrado.
+- [ ] **11. Explicabilidade via caminho ótimo (XAI path-based)** -- o
+  caminho de conquista (predecessores) já é calculado internamente
+  durante o treino; falta extrair e visualizar: para uma predição, mostrar
+  o protótipo de origem, o caminho percorrido no grafo, e o peso fuzzy
+  acumulado ao longo da trajetória, como justificativa da decisão.
+  Esforço médio.
+- [ ] **12. Pertinência por ambiguidade de fronteira (entropia de
+  vizinhança de rótulos)** -- refinamento mais concreto e testável do
+  item 5 do roteiro anterior (pertinência adaptativa): em vez de entropia
+  local genérica, usar especificamente a MISTURA DE RÓTULOS na
+  vizinhança de cada nó -- se um nó está numa região densa mas cercada por
+  vizinhos de classes opostas (fronteira de decisão), sua pertinência cai,
+  independente da densidade pura. Tema de alta relevância atual na IEEE
+  TFS (pertinência sob incerteza de fronteira / possibilistic clustering).
+  Esforço médio -- mais bem definido que o item 5 genérico, bom candidato
+  a vir antes dele.
+- [ ] **13. Distâncias não-Euclidianas (Mahalanobis, geodésica,
+  Wasserstein)** -- Mahalanobis pode já estar registrada na `opfython`
+  (já testamos várias métricas dela em `compare_distances.py`, conferir se
+  está na lista); geodésica e Wasserstein exigiriam implementação do
+  zero. Esforço parcial-baixo para Mahalanobis, alto para as outras duas.
+
+**Fora de escopo para este trabalho (registradas apenas como trabalho
+futuro no texto do artigo, não para implementar agora)**: Fuzzy OPF sobre
+features profundas/deep learning (pipeline totalmente diferente, exige
+rede neural e dataset de imagem que não temos), Fuzzy OPF Federado
+(sem cenário multi-nó real para testar), formulação quantum-inspired/PUBO-
+QUBO para seleção de protótipos (foge completamente do escopo, é outro
+projeto de pesquisa inteiro).
+
+**Estrutura de publicação sugerida** (concordância com a análise externa):
+Plano A (fechar o artigo atual) = Fuzzy-OPF + prova teórica de suavidade +
+validação por meta-heurísticas (GA/PSO/DE/GWO/Bayesiano/NSGA-II) + KD-tree
+-- já está pronto, sem pendência de código. Plano B (artigo de extensão
+futuro, separado) = Fuzzy OPF-AD (detecção de anomalias) OU Fuzzy Active
+Learning -- não tentar espremer no artigo atual.
+
+## Roteiro para maior impacto internacional (2026-09-22, análise de sugestões externas)
+
+Registrado a partir de uma lista de diretrizes de alto valor para
+publicações futuras. Ordenado por esforço estimado (mais fácil primeiro),
+com status do que já foi feito vs. o que é escopo novo.
+
+- [x] **Prova formal de preservação/quebra das garantias teóricas** --
+  já feito, ver `docs/smoothness_proof.tex` (item 6 da lista de revisão
+  externa anterior).
+- [x] **Meta-heurísticas para hiperparâmetros (parcial)** -- GA, PSO,
+  Bayesiano (Optuna) e NSGA-II já implementados e testados. Faltam
+  Differential Evolution e Grey Wolf Optimizer especificamente
+  (a `opytimizer` provavelmente já os tem prontos -- baixo esforço).
+- [x] **1. Adicionar Differential Evolution e Grey Wolf Optimizer** --
+  **implementado e testado**. `de_search()` e `gwo_search()` seguem
+  exatamente a mesma interface de `genetic_search`/`pso_search`
+  (reaproveitam `_run_metaheuristic_search` sem duplicar lógica).
+  Integrados como métodos 5 e 6 em `run_hyperparam_search.py` (agora
+  compara GA, PSO, Random, Bayesiano, DE, GWO -- 6 métodos). Testado no
+  Cone-Torus: os 6 convergem pra mesma região boa de sigma. Ajuste
+  importante: `max_workers` agora limitado ao número de núcleos da
+  máquina (antes seria `len(method_names)`, que com 6 métodos
+  sobrecarregaria uma máquina de 4 núcleos) -- métodos extras entram na
+  fila automaticamente, não são descartados. 35 testes passando. Ainda
+  não rodado no Thyroid para ver se DE/GWO reproduzem o mesmo padrão de
+  "presos em ótimo local com orçamento pequeno" que GA/PSO mostraram.
+- [ ] **2. Fuzzy OPF para Detecção de Anomalias (Fuzzy OPF-AD)** -- bom
+  encaixe com o que já existe: nós com pertinência muito baixa e custo de
+  caminho desproporcional já são, implicitamente, os "outliers" que o
+  Fuzzy-OPF identifica -- falta formalizar como tarefa de detecção
+  (threshold sobre pertinência/custo, métricas de detecção de anomalia
+  em vez de classificação). Esforço médio.
+- [ ] **3. Fuzzy OPF para Active Learning / Semi-supervisionado** -- usar
+  o grau de pertinência fuzzy já calculado como critério de incerteza
+  para seleção de amostras a rotular (amostras de menor pertinência =
+  maior ambiguidade = mais informativas para rotular). Esforço médio,
+  reaproveita a pertinência que já calculamos.
+- [ ] **4. Seleção de protótipos via meta-heurística** -- diferente de
+  ajustar hiperparâmetros (k_max, sigma): usar GA/PSO para escolher quais
+  amostras específicas viram protótipos, não só onde cortar o MST.
+  Formulação nova, esforço médio-alto.
+- [ ] **5. Funções de pertinência adaptativas** (entropia local da
+  vizinhança, perturbação de vizinhança, ou Type-2 Fuzzy Sets) -- diferente
+  de `membership_kind`/`membership_source` (que já testamos, ambos
+  estáticos por amostra): pertinência que muda dinamicamente com a
+  incerteza local. Type-2 Fuzzy especificamente é mudança de framework
+  matemático, não ajuste incremental. Esforço alto.
+- [ ] **6. Fuzzy OPF sem pré-clustering (custo fuzzy on-the-fly)** --
+  eliminar a fase separada de estimativa de densidade, incorporando a
+  incerteza diretamente na competição em tempo de execução. O KD-tree
+  (item 7 da lista anterior) acelera o pré-clustering mas não o elimina --
+  isso é mudança arquitetural real. Esforço alto.
+- [ ] **7. Fuzzy OPF incremental para data streams** -- atualizar o grafo
+  e a matriz de pertinência em tempo real sem retreinar do zero. Mais
+  distante do que já existe (tudo assume batch); exigiria repensar a
+  estrutura de dados do grafo. Esforço alto.
+- [ ] **8. Fuzzy OPF distribuído/GPU (CUDA/Spark)** -- validar
+  escalabilidade para milhões de instâncias. Dificultado pela natureza
+  sequencial/gulosa do algoritmo de competição (cada nó conquistado
+  depende do estado atual do heap, resistente a vetorização GPU-style);
+  também exigiria datasets que não temos. Esforço muito alto -- candidato
+  a ficar fora do escopo desse trabalho, registrado como trabalho futuro
+  no próprio artigo em vez de implementado.
+
 ## SMOTE + busca robusta nos demais datasets desbalanceados -- 2026-09-22
 
 - [x] **Testado SMOTE + busca via GA robusta (n_agents=15) em Cone-Torus,
