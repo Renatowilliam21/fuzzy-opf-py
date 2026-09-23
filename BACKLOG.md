@@ -318,8 +318,33 @@ implementado], pertinência adaptativa, on-the-fly, GPU/Spark, incremental)
   Fuzzy-OPF em 7 níveis de ruído, 0% a 30%, treino corrompido / teste
   sempre limpo). 37 testes passando. Testado mecanicamente no Cone-Torus
   (empate nos dois, esperado nesse `sigma` fixo, mesmo padrão de platô já
-  visto nesse dataset) -- falta rodar no Thyroid (`noise_thyroid.yaml`
-  pronta), onde há mais chance de diferença real aparecer.
+  visto nesse dataset).
+
+  **Testado no Thyroid (sigma=1.15, k_max=20, seed única)**:
+
+  | Ruído | OPF | Fuzzy-OPF | Diferença |
+  |---|---|---|---|
+  | 0% | 0.7370 | 0.7543 | +0.0173 |
+  | 5% | 0.7233 | 0.7210 | -0.0023 |
+  | 10% | 0.7136 | 0.7089 | -0.0047 |
+  | 15% | 0.6528 | 0.6486 | -0.0042 |
+  | 20% | 0.6488 | 0.6454 | -0.0034 |
+  | 25% | 0.6193 | 0.6218 | +0.0025 |
+  | 30% | 0.6017 | 0.6042 | +0.0025 |
+
+  **Resultado negativo, honesto**: a hipótese de que a pertinência fuzzy
+  atua como "amortecedor" contra ruído de rótulo **não se confirma**. As
+  duas curvas de degradação têm formato quase idêntico (ambas caem de
+  ~0.74-0.75 para ~0.60), sem tendência clara de o Fuzzy-OPF cair mais
+  devagar -- as diferenças por nível (±0.005) estão na mesma ordem do
+  ruído estatístico já visto em outros achados desta investigação com
+  seed única. Padrão notável: a vantagem do Fuzzy-OPF que existe SEM
+  ruído (+0.0173) desaparece assim que qualquer ruído é introduzido
+  (5-20%), voltando a aparecer (pequena) só nos níveis mais altos
+  (25-30%) -- mais consistente com "a vantagem sem ruído é frágil e se
+  dissolve com perturbação" do que com "robustez a ruído". **Não
+  confirmado com múltiplas seeds** (ficou fora do escopo desta rodada);
+  resultado registrado como está, sem forçar conclusão positiva.
 - [x] **10. API estilo scikit-learn (`predict_proba`)** --
   **implementado e testado**. `FuzzyOPF.predict_proba()` (alias de
   `predict_class_scores()` sob o nome convencional) + `self.classes_`
@@ -363,6 +388,27 @@ validação por meta-heurísticas (GA/PSO/DE/GWO/Bayesiano/NSGA-II) + KD-tree
 -- já está pronto, sem pendência de código. Plano B (artigo de extensão
 futuro, separado) = Fuzzy OPF-AD (detecção de anomalias) OU Fuzzy Active
 Learning -- não tentar espremer no artigo atual.
+
+## Correção de CI: opytimizer 5.x quebra a API -- 2026-09-23
+
+- [x] **CI falhou por `opytimizer` 5.0.1 (lançada recentemente) ser uma
+  reescrita incompatível** -- `pyproject.toml` só exigia `opytimizer>=4.1.0`
+  sem limite superior, então o `pip install` do CI (ambiente limpo) pegou
+  a versão mais nova disponível no PyPI, diferente da 4.1.0 que está
+  instalada (e validada) na máquina de desenvolvimento. A quebra é
+  estrutural, não um simples parâmetro renomeado: `Opytimizer.start()` foi
+  **removido inteiramente** da classe principal na 5.x (só sobrou `load`
+  como método público) -- API de orquestração inteira redesenhada.
+
+  **Decisão**: não migrar `tuning.py` pra 5.x agora (arriscado demais sem
+  tempo para validar cada método de busca contra uma API nova e ainda
+  não estudada). Corrigido fixando a versão em `pyproject.toml`:
+  `opytimizer>=4.1.0,<5.0.0`, com comentário explicando o porquê (pra não
+  ser removido sem querer no futuro). Confirmado localmente: `pytest -q`
+  volta a dar 37/37 com o pin aplicado. **Migração pra 5.x fica registrada
+  como item de backlog futuro**, não urgente -- exigiria portar
+  `genetic_search`/`pso_search`/`de_search`/`gwo_search`/`nsga2_search`/
+  `bayesian_search` e revalidar cada um contra a API nova.
 
 ## Roteiro para maior impacto internacional (2026-09-22, análise de sugestões externas)
 

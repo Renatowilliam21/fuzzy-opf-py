@@ -1,0 +1,15 @@
+noise_rate,method,test_accuracy
+0.0,opf,0.7370
+0.0,fuzzy-opf,0.7543
+0.05,opf,0.7233
+0.05,fuzzy-opf,0.7210
+0.1,opf,0.7136
+0.1,fuzzy-opf,0.7089
+0.15,opf,0.6528
+0.15,fuzzy-opf,0.6486
+0.2,opf,0.6488
+0.2,fuzzy-opf,0.6454
+0.25,opf,0.6193
+0.25,fuzzy-opf,0.6218
+0.3,opf,0.6017
+0.3,fuzzy-opf,0.6042
