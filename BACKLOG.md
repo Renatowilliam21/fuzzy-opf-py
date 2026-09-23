@@ -311,19 +311,22 @@ acima (Fuzzy OPF-AD, Active Learning, seleção de protótipos, DE/GWO [já
 implementado], pertinência adaptativa, on-the-fly, GPU/Spark, incremental)
 -- só o que é genuinamente novo é listado aqui, ordenado por esforço.
 
-- [ ] **9. Robustez a ruído de rótulos** -- corromper X% dos rótulos de
-  treino (5% a 30%) e medir quantitativamente se a pertinência fuzzy atua
-  como "amortecedor" contra protótipos ruidosos conquistando grandes
-  regiões do grafo, comparando Fuzzy-OPF vs. OPF padrão sob ruído
-  crescente. Esforço baixo -- reaproveita toda a infraestrutura de
-  experimento já pronta (só precisa de uma função de corrupção de rótulos
-  antes do treino).
-- [ ] **10. API estilo scikit-learn (`predict_proba`)** -- expor
-  `predict_class_scores()` (já implementado para AUC-ROC) sob a convenção
-  `predict_proba`, e formalizar `fit`/`predict`/`predict_proba` como
-  interface pública documentada. Esforço baixo -- quase todo o código já
-  existe, é principalmente documentação/polimento de API. Complementa o
-  item de publicar no PyPI já registrado.
+- [x] **9. Robustez a ruído de rótulos** -- **implementado e testado**.
+  `corrupt_labels()` (ruído simétrico padrão da literatura: reatribui
+  rótulo pra uma classe diferente, uniformemente aleatória, nunca a
+  original) + `label_noise_test.py` (compara degradação de OPF vs.
+  Fuzzy-OPF em 7 níveis de ruído, 0% a 30%, treino corrompido / teste
+  sempre limpo). 37 testes passando. Testado mecanicamente no Cone-Torus
+  (empate nos dois, esperado nesse `sigma` fixo, mesmo padrão de platô já
+  visto nesse dataset) -- falta rodar no Thyroid (`noise_thyroid.yaml`
+  pronta), onde há mais chance de diferença real aparecer.
+- [x] **10. API estilo scikit-learn (`predict_proba`)** --
+  **implementado e testado**. `FuzzyOPF.predict_proba()` (alias de
+  `predict_class_scores()` sob o nome convencional) + `self.classes_`
+  (definido no `fit()`, convenção scikit-learn) -- torna o `FuzzyOPF`
+  utilizável como classificador plugável em qualquer código que espere a
+  interface padrão `fit`/`predict`/`predict_proba` (Pipeline,
+  cross_val_predict, etc.). 37 testes passando.
 - [ ] **11. Explicabilidade via caminho ótimo (XAI path-based)** -- o
   caminho de conquista (predecessores) já é calculado internamente
   durante o treino; falta extrair e visualizar: para uma predição, mostrar
@@ -384,9 +387,45 @@ com status do que já foi feito vs. o que é escopo novo.
   importante: `max_workers` agora limitado ao número de núcleos da
   máquina (antes seria `len(method_names)`, que com 6 métodos
   sobrecarregaria uma máquina de 4 núcleos) -- métodos extras entram na
-  fila automaticamente, não são descartados. 35 testes passando. Ainda
-  não rodado no Thyroid para ver se DE/GWO reproduzem o mesmo padrão de
-  "presos em ótimo local com orçamento pequeno" que GA/PSO mostraram.
+  fila automaticamente, não são descartados.
+
+  **Bug real encontrado e corrigido ao rodar no Thyroid**: `DE` da
+  `opytimizer` quebra com `n_agents < 4` (erro críptico do NumPy vindo de
+  dentro da biblioteca) -- o mecanismo de mutação do DE sorteia 3 agentes
+  distintos excluindo o atual, exigindo população mínima de 4. Nosso
+  padrão de orçamento pequeno (`n_agents=3`, escolhido para o teste de
+  "GA/PSO ficam presos em ótimo local?") ficava abaixo desse mínimo
+  estrutural do DE. Corrigido em duas camadas: (1) `de_search()` agora
+  valida e levanta erro claro em vez de deixar quebrar fundo na
+  biblioteca; (2) `run_hyperparam_search.py` ajusta automaticamente o
+  DE para `n_agents=max(n_agents, 4)`, recalculando `n_iterations` a
+  partir do mesmo orçamento nominal -- preserva o `n_agents=3` original
+  para GA/PSO (não muda o teste que já fizemos), só corrige o DE
+  especificamente. Confirmado funcionando no Cone-Torus com
+  `n_agents=3, budget=9` (o cenário exato que quebrou antes). 37 testes
+  passando.
+
+  **Testado no Thyroid, orçamento pequeno (mesmo cenário onde GA/PSO
+  ficaram presos antes)**:
+
+  | Método | sigma | val_acc | Escapou do vale? |
+  |---|---|---|---|
+  | GA | 0.9152 | 0.7376 | Não |
+  | PSO | 0.9152 | 0.7376 | Não |
+  | Random | 1.1128 | 0.7559 | Sim |
+  | Bayesiano | 1.1637 | 0.7559 | Sim |
+  | **DE** | 1.1697 | 0.7559 | **Sim** |
+  | **GWO** | 1.1066 | **0.7562** (melhor de todos) | **Sim** |
+
+  **Conclusão**: DE e GWO se comportam como Random/Bayesiano, não como
+  GA/PSO -- escapam do vale de ótimo local mesmo com orçamento pequeno.
+  Isso refina o achado original: não é "metaheurísticas populacionais em
+  geral são suscetíveis a ótimo local com orçamento pequeno" -- é algo
+  mais específico do mecanismo de seleção/cruzamento do GA e da dinâmica
+  de velocidade do PSO. DE (mutação diferencial) e GWO (hierarquia de
+  lobos), embora igualmente populacionais, não sofrem do mesmo jeito.
+  Contribuição mais precisa: a suscetibilidade depende do MECANISMO de
+  busca específico, não da categoria "populacional vs. não-populacional".
 - [ ] **2. Fuzzy OPF para Detecção de Anomalias (Fuzzy OPF-AD)** -- bom
   encaixe com o que já existe: nós com pertinência muito baixa e custo de
   caminho desproporcional já são, implicitamente, os "outliers" que o
